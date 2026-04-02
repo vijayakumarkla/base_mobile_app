@@ -9,8 +9,15 @@ import '../widgets/decision_table.dart';
 import '../widgets/stop_loss.dart';
 import '../widgets/income_plan.dart';
 
-class HomeScreen extends StatelessWidget {
-  final double nifty = 22500;
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({Key? key}) : super(key: key);
+
+  @override
+  _HomeScreenState createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  double? nifty; // 🔥 dynamic value
   final double vix = 18;
   final String trend = "Bullish";
 
@@ -30,18 +37,37 @@ class HomeScreen extends StatelessWidget {
         child: Column(
           children: [
             MarketBanner(type: marketType),
-            RealtimeNiftyCard(),
-            MarketCard(nifty: nifty, vix: vix, trend: trend),
+
+            // 🔥 Pass callback here
+            RealtimeNiftyCard(
+              onNiftyUpdate: (value) {
+                setState(() {
+                  nifty = value;
+                });
+              },
+            ),
+
+            // 🔥 Use live nifty (fallback if null)
+            MarketCard(
+              nifty: nifty ?? 0,
+              vix: vix,
+              trend: trend,
+            ),
+
             Row(
               children: [
                 Expanded(
                   child: StrategyCard(type: marketType),
                 ),
                 Expanded(
-                  child: TradeSetup(type: marketType, nifty: nifty),
+                  child: TradeSetup(
+                    type: marketType,
+                    nifty: nifty ?? 0, // 🔥 dynamic
+                  ),
                 ),
               ],
             ),
+
             Rules(type: marketType),
             DecisionTable(type: marketType),
             StopLoss(type: marketType),
@@ -52,4 +78,3 @@ class HomeScreen extends StatelessWidget {
     );
   }
 }
-
