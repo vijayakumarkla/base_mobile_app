@@ -69,6 +69,24 @@ class Member {
 }
 
 ////////////////////////////////////////////////////////////
+/// APP LOCK
+////////////////////////////////////////////////////////////
+
+class LockService {
+  static const key = "pin";
+
+  static Future<String?> getPin() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString(key);
+  }
+
+  static Future<void> setPin(String pin) async {
+    final p = await SharedPreferences.getInstance();
+    p.setString(key, pin);
+  }
+}
+
+////////////////////////////////////////////////////////////
 /// APP ROOT
 ////////////////////////////////////////////////////////////
 
@@ -107,9 +125,72 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
+////////////////////////////////////////////////////////////
+/// LOCK SCREEN
+////////////////////////////////////////////////////////////
+
+class LockScreen extends StatefulWidget {
+  final VoidCallback onUnlock;
+  const LockScreen({super.key, required this.onUnlock});
+
+  @override
+  State<LockScreen> createState() => _LockScreenState();
+}
+
+class _LockScreenState extends State<LockScreen> {
+  TextEditingController pin = TextEditingController();
+  String? savedPin;
+
+  @override
+  void initState() {
+    super.initState();
+    loadPin();
+  }
+
+  void loadPin() async {
+    savedPin = await LockService.getPin();
+    setState(() {});
+  }
+
+  void check() async {
+    if (savedPin == null) {
+      await LockService.setPin(pin.text);
+      widget.onUnlock();
+    } else if (savedPin == pin.text) {
+      widget.onUnlock();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(savedPin == null ? "Set PIN" : "Enter PIN"),
+              TextField(
+                controller: pin,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: check,
+                child: const Text("Unlock"),
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 ////////////////////////////////////////////////////////////
-/// FAMILY PAGE
+/// FAMILY PAGE (EDIT + DELETE ADDED SAFELY)
 ////////////////////////////////////////////////////////////
 
 class FamilyPage extends StatefulWidget {
@@ -161,9 +242,22 @@ class _FamilyPageState extends State<FamilyPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(controller: name),
+            const SizedBox(height: 10),
             DropdownButton<String>(
               value: avatar,
-              items: ["🙂", "👨", "👩", "👧", "👦", "🧓"]
+              items: [
+  "🙂",
+  "👨🏻", "👩🏻",
+  "👨🏼", "👩🏼",
+  "👨🏽", "👩🏽",
+  "👨🏾", "👩🏾",
+  "👨🏿", "👩🏿",
+  "👦🏻", "👧🏻",
+  "👦🏼", "👧🏼",
+  "👶🏻",
+  "🧒🏻",
+  "🧓🏻"
+]
                   .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                   .toList(),
               onChanged: (v) => avatar = v!,
@@ -173,6 +267,8 @@ class _FamilyPageState extends State<FamilyPage> {
         actions: [
           TextButton(
             onPressed: () {
+              if (name.text.trim().isEmpty) return;
+
               setState(() {
                 members.add(Member(name.text, avatar, [], {}));
               });
@@ -181,6 +277,85 @@ class _FamilyPageState extends State<FamilyPage> {
             },
             child: const Text("Add"),
           )
+        ],
+      ),
+    );
+  }
+
+  void editMember(int index) {
+    TextEditingController name =
+        TextEditingController(text: members[index].name);
+
+    String avatar = members[index].avatar;
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Edit Member"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: name),
+            const SizedBox(height: 10),
+            DropdownButton<String>(
+              value: avatar,
+              items: [
+  "🙂",
+  "👨🏻", "👩🏻",
+  "👨🏼", "👩🏼",
+  "👨🏽", "👩🏽",
+  "👨🏾", "👩🏾",
+  "👨🏿", "👩🏿",
+  "👦🏻", "👧🏻",
+  "👦🏼", "👧🏼",
+  "👶🏻",
+  "🧒🏻",
+  "🧓🏻"
+]
+                  .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                  .toList(),
+              onChanged: (v) => setState(() => avatar = v!),
+            )
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() {
+                members[index].name = name.text;
+                members[index].avatar = avatar;
+              });
+              save();
+              Navigator.pop(context);
+            },
+            child: const Text("Save"),
+          )
+        ],
+      ),
+    );
+  }
+
+  void deleteMember(int index) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Delete Member?"),
+        content: Text("Are you sure you want to delete ${members[index].name}?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                members.removeAt(index);
+              });
+              save();
+              Navigator.pop(context);
+            },
+            child: const Text("Delete"),
+          ),
         ],
       ),
     );
@@ -212,15 +387,48 @@ class _FamilyPageState extends State<FamilyPage> {
     );
   }
 
+  void showOptions(int index) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.edit),
+            title: const Text("Edit"),
+            onTap: () {
+              Navigator.pop(context);
+              editMember(index);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete, color: Colors.red),
+            title: const Text("Delete"),
+            onTap: () {
+              Navigator.pop(context);
+              deleteMember(index);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Happy Family"),
         actions: [
-          IconButton(icon: const Icon(Icons.brightness_6), onPressed: widget.onToggle),
-          IconButton(icon: const Icon(Icons.bar_chart), onPressed: openComparison),
-          IconButton(icon: const Icon(Icons.insights), onPressed: openReport),
+          IconButton(
+              icon: const Icon(Icons.brightness_6),
+              onPressed: widget.onToggle),
+          IconButton(
+              icon: const Icon(Icons.bar_chart),
+              onPressed: openComparison),
+          IconButton(
+              icon: const Icon(Icons.insights),
+              onPressed: openReport),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -231,17 +439,25 @@ class _FamilyPageState extends State<FamilyPage> {
         itemCount: members.length,
         itemBuilder: (_, i) {
           final m = members[i];
+
           return ListTile(
-            leading: Text(m.avatar, style: const TextStyle(fontSize: 24)),
+            leading: CircleAvatar(
+  radius: 30,
+  backgroundColor: Colors.blueGrey.shade700,
+  child: Text(
+    m.avatar,
+    style: const TextStyle(fontSize: 30),
+  ),
+),
             title: Text(m.name),
             onTap: () => openMember(m),
+            onLongPress: () => showOptions(i),
           );
         },
       ),
     );
   }
 }
-
 ////////////////////////////////////////////////////////////
 /// MEMBER PAGE
 ////////////////////////////////////////////////////////////
