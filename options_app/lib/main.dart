@@ -8,7 +8,7 @@ void main() {
 }
 
 ////////////////////////////////////////////////////////////
-/// GLOBAL
+/// GLOBAL COLORS
 ////////////////////////////////////////////////////////////
 
 final List<Color> chartColors = [
@@ -18,6 +18,14 @@ final List<Color> chartColors = [
   Colors.pink,
   Colors.purple,
 ];
+
+////////////////////////////////////////////////////////////
+/// GLOBAL DATE KEY (FIXED - IMPORTANT)
+////////////////////////////////////////////////////////////
+
+String dateKey(DateTime d) {
+  return "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+}
 
 ////////////////////////////////////////////////////////////
 /// MODELS
@@ -56,7 +64,7 @@ class Member {
         (json["activities"] as List)
             .map((e) => Activity.fromJson(e))
             .toList(),
-        Map<String, int>.from(json["daily"]),
+        Map<String, int>.from(json["daily"] ?? {}),
       );
 }
 
@@ -124,7 +132,9 @@ class _FamilyPageState extends State<FamilyPage> {
   Future<void> save() async {
     final prefs = await SharedPreferences.getInstance();
     prefs.setString(
-        "members", jsonEncode(members.map((e) => e.toJson()).toList()));
+      "members",
+      jsonEncode(members.map((e) => e.toJson()).toList()),
+    );
   }
 
   Future<void> load() async {
@@ -150,7 +160,7 @@ class _FamilyPageState extends State<FamilyPage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: name, decoration: const InputDecoration(hintText: "Name")),
+            TextField(controller: name),
             DropdownButton<String>(
               value: avatar,
               items: ["🙂", "👨", "👩", "👧", "👦", "🧓"]
@@ -180,7 +190,11 @@ class _FamilyPageState extends State<FamilyPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-          builder: (_) => HomePage(member: m, onSave: save)),
+        builder: (_) => HomePage(
+          member: members[members.indexOf(m)],
+          onSave: save,
+        ),
+      ),
     );
   }
 
@@ -209,8 +223,10 @@ class _FamilyPageState extends State<FamilyPage> {
           IconButton(icon: const Icon(Icons.insights), onPressed: openReport),
         ],
       ),
-      floatingActionButton:
-          FloatingActionButton(onPressed: addMember, child: const Icon(Icons.add)),
+      floatingActionButton: FloatingActionButton(
+        onPressed: addMember,
+        child: const Icon(Icons.add),
+      ),
       body: ListView.builder(
         itemCount: members.length,
         itemBuilder: (_, i) {
@@ -243,9 +259,6 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   String filter = "week";
 
-  String dateKey(DateTime d) =>
-      "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
-
   @override
   void initState() {
     super.initState();
@@ -262,12 +275,18 @@ class _HomePageState extends State<HomePage> {
   }
 
   List<FlSpot> getData() {
-    int days = filter == "week" ? 7 : filter == "month" ? 30 : 365;
+    int days = filter == "week"
+        ? 7
+        : filter == "month"
+            ? 30
+            : 365;
 
     return List.generate(days, (i) {
       final d = DateTime.now().subtract(Duration(days: days - 1 - i));
-      return FlSpot(i.toDouble(),
-          (widget.member.dailyScore[dateKey(d)] ?? 0).toDouble());
+      return FlSpot(
+        i.toDouble(),
+        (widget.member.dailyScore[dateKey(d)] ?? 0).toDouble(),
+      );
     });
   }
 
@@ -288,7 +307,6 @@ class _HomePageState extends State<HomePage> {
             ],
             onChanged: (v) => setState(() => filter = v!),
           ),
-
           Expanded(
             child: LineChart(
               LineChartData(
@@ -307,7 +325,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-
           Expanded(
             child: ListView.builder(
               itemCount: widget.member.activities.length,
@@ -331,8 +348,10 @@ class _HomePageState extends State<HomePage> {
           )
         ],
       ),
-      floatingActionButton:
-          FloatingActionButton(onPressed: addActivity, child: const Icon(Icons.add)),
+      floatingActionButton: FloatingActionButton(
+        onPressed: addActivity,
+        child: const Icon(Icons.add),
+      ),
     );
   }
 
@@ -351,6 +370,7 @@ class _HomePageState extends State<HomePage> {
                 widget.member.activities.add(Activity(c.text, 0));
               });
               widget.onSave();
+              updateScore();
               Navigator.pop(context);
             },
             child: const Text("Add"),
@@ -372,15 +392,12 @@ class _HomePageState extends State<HomePage> {
 }
 
 ////////////////////////////////////////////////////////////
-/// COMPARISON
+/// COMPARISON PAGE (FIXED)
 ////////////////////////////////////////////////////////////
 
 class ComparisonPage extends StatelessWidget {
   final List<Member> members;
   const ComparisonPage(this.members, {super.key});
-
-  String dateKey(DateTime d) =>
-      "${d.year}-${d.month}-${d.day}";
 
   @override
   Widget build(BuildContext context) {
@@ -411,11 +428,12 @@ class ComparisonPage extends StatelessWidget {
                   List<FlSpot> spots = [];
 
                   for (int j = 0; j < 7; j++) {
-                    final d =
-                        DateTime.now().subtract(Duration(days: 6 - j));
-                    spots.add(FlSpot(
-                        j.toDouble(),
-                        (m.dailyScore[dateKey(d)] ?? 0).toDouble()));
+                    final d = DateTime.now().subtract(Duration(days: 6 - j));
+
+                    double value =
+                        (m.dailyScore[dateKey(d)] ?? 0).toDouble();
+
+                    spots.add(FlSpot(j.toDouble(), value));
                   }
 
                   return LineChartBarData(
@@ -434,16 +452,12 @@ class ComparisonPage extends StatelessWidget {
 }
 
 ////////////////////////////////////////////////////////////
-/// REPORT (AI STYLE)
+/// REPORT PAGE (FIXED)
 ////////////////////////////////////////////////////////////
 
 class ReportPage extends StatelessWidget {
   final List<Member> members;
-
   const ReportPage(this.members, {super.key});
-
-  String dateKey(DateTime d) =>
-      "${d.year}-${d.month}-${d.day}";
 
   @override
   Widget build(BuildContext context) {
@@ -453,7 +467,7 @@ class ReportPage extends StatelessWidget {
         children: members.map((m) {
           int total = 0;
 
-          for (int i = 0; i < 7; i++) {
+          for (int i = 6; i >= 0; i--) {
             final d = DateTime.now().subtract(Duration(days: i));
             total += m.dailyScore[dateKey(d)] ?? 0;
           }
