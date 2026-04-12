@@ -2,14 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:async';
 
 void main() {
   runApp(const MyApp());
 }
 
 ////////////////////////////////////////////////////////////
-/// COLORS
+/// GLOBALS
 ////////////////////////////////////////////////////////////
+
+String dateKey(DateTime d) =>
+    "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
 
 final List<Color> chartColors = [
   Colors.cyan,
@@ -18,46 +23,6 @@ final List<Color> chartColors = [
   Colors.pink,
   Colors.purple,
 ];
-
-////////////////////////////////////////////////////////////
-/// DATE KEY
-////////////////////////////////////////////////////////////
-
-String dateKey(DateTime d) {
-  return "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
-}
-
-////////////////////////////////////////////////////////////
-/// STAR SYSTEM
-////////////////////////////////////////////////////////////
-
-String getStars(int score) {
-  if (score >= 80) return "⭐⭐⭐";
-  if (score >= 60) return "⭐⭐";
-  if (score >= 40) return "⭐";
-  return "";
-}
-
-////////////////////////////////////////////////////////////
-/// HABITS
-////////////////////////////////////////////////////////////
-
-Map<String, List<String>> habitCategories = {
-  "Morning": [
-    "⏰ Wake up early",
-    "🪥 Brush teeth",
-    "🚿 Bath",
-    "🍳 Breakfast"
-  ],
-  "School": [
-    "📚 Homework",
-    "🎒 School bag",
-  ],
-  "Behaviour": [
-    "🙂 Good attitude",
-    "🙏 Respect",
-  ],
-};
 
 ////////////////////////////////////////////////////////////
 /// MODELS
@@ -73,8 +38,8 @@ class Activity {
   Map<String, dynamic> toJson() =>
       {"name": name, "icon": icon, "done": done};
 
-  static Activity fromJson(Map<String, dynamic> json) =>
-      Activity(json["name"], json["icon"], json["done"]);
+  static Activity fromJson(Map<String, dynamic> j) =>
+      Activity(j["name"], j["icon"], j["done"]);
 }
 
 class Member {
@@ -82,23 +47,26 @@ class Member {
   String avatar;
   List<Activity> activities;
   Map<String, int> dailyScore;
+  Map<String, int> missed;
 
-  Member(this.name, this.avatar, this.activities, this.dailyScore);
+  Member(this.name, this.avatar, this.activities, this.dailyScore, this.missed);
 
   Map<String, dynamic> toJson() => {
         "name": name,
         "avatar": avatar,
         "activities": activities.map((e) => e.toJson()).toList(),
-        "daily": dailyScore
+        "daily": dailyScore,
+        "missed": missed,
       };
 
-  static Member fromJson(Map<String, dynamic> json) => Member(
-        json["name"],
-        json["avatar"],
-        (json["activities"] as List)
+  static Member fromJson(Map<String, dynamic> j) => Member(
+        j["name"],
+        j["avatar"],
+        (j["activities"] as List)
             .map((e) => Activity.fromJson(e))
             .toList(),
-        Map<String, int>.from(json["daily"]),
+        Map<String, int>.from(j["daily"]),
+        Map<String, int>.from(j["missed"] ?? {}),
       );
 }
 
@@ -119,7 +87,7 @@ class MyApp extends StatelessWidget {
 }
 
 ////////////////////////////////////////////////////////////
-/// FAMILY PAGE
+/// FAMILY PAGE + SYNC
 ////////////////////////////////////////////////////////////
 
 class FamilyPage extends StatefulWidget {
@@ -132,11 +100,21 @@ class FamilyPage extends StatefulWidget {
 class _FamilyPageState extends State<FamilyPage> {
   List<Member> members = [];
 
+  HttpServer? server;
+  RawDatagramSocket? sender;
+  RawDatagramSocket? receiver;
+  List<String> devices = [];
+  Timer? autoSync;
+
   @override
   void initState() {
     super.initState();
     load();
   }
+
+  ////////////////////////////////////////////////////////////
+  /// STORAGE
+  ////////////////////////////////////////////////////////////
 
   Future<void> save() async {
     final p = await SharedPreferences.getInstance();
@@ -146,13 +124,133 @@ class _FamilyPageState extends State<FamilyPage> {
   Future<void> load() async {
     final p = await SharedPreferences.getInstance();
     final data = p.getString("members");
-
     if (data != null) {
       members =
           (jsonDecode(data) as List).map((e) => Member.fromJson(e)).toList();
     }
     setState(() {});
   }
+
+  ////////////////////////////////////////////////////////////
+  /// SERVER + BROADCAST
+  ////////////////////////////////////////////////////////////
+
+  Future<void> startServer() async {
+    final ip = await _getIp();
+
+    server = await HttpServer.bind(InternetAddress.anyIPv4, 8080);
+
+    startBroadcast(ip);
+
+    server!.listen((req) async {
+      final data = jsonEncode(members.map((e) => e.toJson()).toList());
+      req.response
+        ..headers.contentType = ContentType.json
+        ..write(data)
+        ..close();
+    });
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text("Sharing: $ip")));
+  }
+
+  Future<String> _getIp() async {
+    for (var i in await NetworkInterface.list()) {
+      for (var addr in i.addresses) {
+        if (!addr.isLoopback && addr.type == InternetAddressType.IPv4) {
+          return addr.address;
+        }
+      }
+    }
+    return "0.0.0.0";
+  }
+
+  void startBroadcast(String ip) async {
+    sender = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+    sender!.broadcastEnabled = true;
+
+    Timer.periodic(const Duration(seconds: 2), (_) {
+      sender!.send(utf8.encode("HF::$ip"),
+          InternetAddress("255.255.255.255"), 8888);
+    });
+  }
+
+  ////////////////////////////////////////////////////////////
+  /// LISTEN + AUTO SYNC
+  ////////////////////////////////////////////////////////////
+
+  void startListening() async {
+    devices.clear();
+
+    receiver =
+        await RawDatagramSocket.bind(InternetAddress.anyIPv4, 8888);
+
+    receiver!.listen((event) {
+      if (event == RawSocketEvent.read) {
+        final dg = receiver!.receive();
+        if (dg != null) {
+          final msg = utf8.decode(dg.data);
+          if (msg.startsWith("HF::")) {
+            final ip = msg.split("::")[1];
+            if (!devices.contains(ip)) {
+              setState(() => devices.add(ip));
+            }
+          }
+        }
+      }
+    });
+
+    showDevices();
+  }
+
+  void showDevices() {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => ListView(
+        children: devices.map((ip) {
+          return ListTile(
+            title: Text(ip),
+            onTap: () {
+              startAutoSync(ip);
+              Navigator.pop(context);
+            },
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  ////////////////////////////////////////////////////////////
+  /// REAL TIME SYNC
+  ////////////////////////////////////////////////////////////
+
+  void startAutoSync(String ip) {
+    autoSync?.cancel();
+
+    autoSync = Timer.periodic(const Duration(seconds: 3), (_) async {
+      try {
+        final client = HttpClient();
+        final req = await client.getUrl(Uri.parse("http://$ip:8080"));
+        final res = await req.close();
+        final body = await res.transform(utf8.decoder).join();
+
+        List decoded = jsonDecode(body);
+
+        setState(() {
+          members = decoded.map((e) => Member.fromJson(e)).toList();
+        });
+
+        save();
+      } catch (_) {}
+    });
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text("Live Sync ON")));
+  }
+
+  ////////////////////////////////////////////////////////////
+  /// UI
+  ////////////////////////////////////////////////////////////
 
   void addMember() {
     TextEditingController c = TextEditingController();
@@ -164,20 +262,21 @@ class _FamilyPageState extends State<FamilyPage> {
         content: TextField(controller: c),
         actions: [
           TextButton(
-              onPressed: () {
-                setState(() {
-                  members.add(Member(c.text, "🙂", [], {}));
-                });
-                save();
-                Navigator.pop(context);
-              },
-              child: const Text("Add"))
+            onPressed: () {
+              setState(() {
+                members.add(Member(c.text, "🙂", [], {}, {}));
+              });
+              save();
+              Navigator.pop(context);
+            },
+            child: const Text("Add"),
+          )
         ],
       ),
     );
   }
 
-  void openMember(Member m) {
+  void open(Member m) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -186,14 +285,9 @@ class _FamilyPageState extends State<FamilyPage> {
     );
   }
 
-  void openComparison() {
+  void openCompare() {
     Navigator.push(
-        context, MaterialPageRoute(builder: (_) => ComparisonPage(members)));
-  }
-
-  void openReport() {
-    Navigator.push(
-        context, MaterialPageRoute(builder: (_) => ReportPage(members)));
+        context, MaterialPageRoute(builder: (_) => ComparePage(members)));
   }
 
   @override
@@ -202,8 +296,9 @@ class _FamilyPageState extends State<FamilyPage> {
       appBar: AppBar(
         title: const Text("Happy Family"),
         actions: [
-          IconButton(icon: const Icon(Icons.bar_chart), onPressed: openComparison),
-          IconButton(icon: const Icon(Icons.insights), onPressed: openReport),
+          IconButton(icon: const Icon(Icons.wifi), onPressed: startServer),
+          IconButton(icon: const Icon(Icons.search), onPressed: startListening),
+          IconButton(icon: const Icon(Icons.bar_chart), onPressed: openCompare),
         ],
       ),
       floatingActionButton:
@@ -212,18 +307,14 @@ class _FamilyPageState extends State<FamilyPage> {
         itemCount: members.length,
         itemBuilder: (_, i) {
           final m = members[i];
+          final today = dateKey(DateTime.now());
 
-          return Card(
-            margin: const EdgeInsets.all(10),
-            child: ListTile(
-              leading: CircleAvatar(
-                  radius: 28,
-                  child: Text(m.avatar, style: const TextStyle(fontSize: 24))),
-              title: Text(m.name),
-              subtitle: Text(getStars(
-                  m.dailyScore[dateKey(DateTime.now())] ?? 0)),
-              onTap: () => openMember(m),
-            ),
+          return ListTile(
+            leading: CircleAvatar(child: Text(m.avatar)),
+            title: Text(m.name),
+            subtitle: Text(
+                "Score: ${m.dailyScore[today] ?? 0}% | Missed: ${m.missed[today] ?? 0}"),
+            onTap: () => open(m),
           );
         },
       ),
@@ -246,95 +337,60 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  String filter = "week";
-
-  double score() {
+  double calcScore() {
     if (widget.member.activities.isEmpty) return 0;
     int done = widget.member.activities.where((e) => e.done).length;
     return (done / widget.member.activities.length) * 100;
   }
 
-  void updateScore() {
-    widget.member.dailyScore[dateKey(DateTime.now())] = score().round();
+  void update() {
+    final today = dateKey(DateTime.now());
+
+    int missed =
+        widget.member.activities.where((e) => !e.done).length;
+
+    widget.member.dailyScore[today] = calcScore().round();
+    widget.member.missed[today] = missed;
+
     widget.onSave();
   }
 
-  List<FlSpot> chartData() {
-    int days = filter == "week" ? 7 : 30;
-
-    return List.generate(days, (i) {
-      final d = DateTime.now().subtract(Duration(days: days - 1 - i));
+  List<FlSpot> chart() {
+    return List.generate(7, (i) {
+      final d = DateTime.now().subtract(Duration(days: 6 - i));
       return FlSpot(
-          i.toDouble(),
-          (widget.member.dailyScore[dateKey(d)] ?? 0).toDouble());
+        i.toDouble(),
+        (widget.member.dailyScore[dateKey(d)] ?? 0).toDouble(),
+      );
     });
   }
 
-  void addActivity() {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Add Habit"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: habitCategories.entries.map((cat) {
-            return Wrap(
-              children: cat.value.map((h) {
-                return ActionChip(
-                  label: Text(h),
-                  onPressed: () {
-                    setState(() {
-                      widget.member.activities
-                          .add(Activity(h.substring(2), h[0], false));
-                    });
-                    updateScore();
-                    widget.onSave();
-                    Navigator.pop(context);
-                  },
-                );
-              }).toList(),
-            );
-          }).toList(),
-        ),
-      ),
-    );
+  String dateLabel(int i) {
+    final d = DateTime.now().subtract(Duration(days: 6 - i));
+    return "${d.day}";
   }
 
   @override
   Widget build(BuildContext context) {
-    final data = chartData();
+    final data = chart();
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.member.name)),
-      floatingActionButton:
-          FloatingActionButton(onPressed: addActivity, child: const Icon(Icons.add)),
       body: Column(
         children: [
-          Text(
-              "Today: ${getStars(widget.member.dailyScore[dateKey(DateTime.now())] ?? 0)}"),
-
-          DropdownButton(
-              value: filter,
-              items: const [
-                DropdownMenuItem(value: "week", child: Text("Weekly")),
-                DropdownMenuItem(value: "month", child: Text("Monthly")),
-              ],
-              onChanged: (v) => setState(() => filter = v!)),
-
           SizedBox(
             height: 220,
             child: LineChart(
               LineChartData(
                 minY: 0,
                 maxY: 100,
-                lineTouchData: LineTouchData(
-                  touchTooltipData: LineTouchTooltipData(
-                    getTooltipItems: (touchedSpots) {
-                      return touchedSpots.map((e) {
-                        return LineTooltipItem(
-                            "${e.y.toInt()}%", const TextStyle());
-                      }).toList();
-                    },
+                titlesData: FlTitlesData(
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (v, meta) =>
+                          Text(dateLabel(v.toInt())),
+                    ),
                   ),
                 ),
                 lineBarsData: [
@@ -348,7 +404,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-
           Expanded(
             child: ListView.builder(
               itemCount: widget.member.activities.length,
@@ -356,16 +411,14 @@ class _HomePageState extends State<HomePage> {
                 final a = widget.member.activities[i];
 
                 return ListTile(
-                  leading: Text(a.icon, style: const TextStyle(fontSize: 28)),
-                  title: Text(a.name),
-                  trailing: Icon(
-                    a.done ? Icons.check_circle : Icons.circle_outlined,
-                    color: a.done ? Colors.green : Colors.grey,
+                  title: Text("${a.icon} ${a.name}"),
+                  trailing: Checkbox(
+                    value: a.done,
+                    onChanged: (v) {
+                      setState(() => a.done = v!);
+                      update();
+                    },
                   ),
-                  onTap: () {
-                    setState(() => a.done = !a.done);
-                    updateScore();
-                  },
                 );
               },
             ),
@@ -377,12 +430,17 @@ class _HomePageState extends State<HomePage> {
 }
 
 ////////////////////////////////////////////////////////////
-/// COMPARISON PAGE (FINAL)
+/// COMPARISON
 ////////////////////////////////////////////////////////////
 
-class ComparisonPage extends StatelessWidget {
+class ComparePage extends StatelessWidget {
   final List<Member> members;
-  const ComparisonPage(this.members, {super.key});
+  const ComparePage(this.members, {super.key});
+
+  String dateLabel(int i) {
+    final d = DateTime.now().subtract(Duration(days: 6 - i));
+    return "${d.day}";
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -395,10 +453,7 @@ class ComparisonPage extends StatelessWidget {
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                      width: 10,
-                      height: 10,
-                      color: chartColors[i]),
+                  Container(width: 10, height: 10, color: chartColors[i]),
                   const SizedBox(width: 5),
                   Text(members[i].name),
                 ],
@@ -410,6 +465,15 @@ class ComparisonPage extends StatelessWidget {
               LineChartData(
                 minY: 0,
                 maxY: 100,
+                titlesData: FlTitlesData(
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (v, meta) =>
+                          Text(dateLabel(v.toInt())),
+                    ),
+                  ),
+                ),
                 lineBarsData: List.generate(members.length, (i) {
                   final m = members[i];
 
@@ -418,8 +482,9 @@ class ComparisonPage extends StatelessWidget {
                       final d = DateTime.now()
                           .subtract(Duration(days: 6 - j));
                       return FlSpot(
-                          j.toDouble(),
-                          (m.dailyScore[dateKey(d)] ?? 0).toDouble());
+                        j.toDouble(),
+                        (m.dailyScore[dateKey(d)] ?? 0).toDouble(),
+                      );
                     }),
                     color: chartColors[i],
                     isCurved: true,
@@ -427,39 +492,8 @@ class ComparisonPage extends StatelessWidget {
                 }),
               ),
             ),
-          )
+          ),
         ],
-      ),
-    );
-  }
-}
-
-////////////////////////////////////////////////////////////
-/// REPORT PAGE
-////////////////////////////////////////////////////////////
-
-class ReportPage extends StatelessWidget {
-  final List<Member> members;
-  const ReportPage(this.members, {super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Weekly Report")),
-      body: ListView(
-        children: members.map((m) {
-          int total = 0;
-
-          for (int i = 0; i < 7; i++) {
-            final d = DateTime.now().subtract(Duration(days: i));
-            total += m.dailyScore[dateKey(d)] ?? 0;
-          }
-
-          return ListTile(
-            title: Text(m.name),
-            subtitle: Text("Score: $total"),
-          );
-        }).toList(),
       ),
     );
   }
