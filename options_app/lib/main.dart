@@ -1,3 +1,5 @@
+// FULL FINAL FILE
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -23,36 +25,6 @@ final List<Color> chartColors = [
   Colors.pink,
   Colors.purple,
 ];
-
-////////////////////////////////////////////////////////////
-/// HABIT MASTER
-////////////////////////////////////////////////////////////
-
-Map<String, List<Map<String, String>>> habitCategories = {
-  "Morning": [
-    {"icon": "⏰", "name": "Wake up"},
-    {"icon": "🪥", "name": "Brush teeth"},
-    {"icon": "🚿", "name": "Bath"},
-    {"icon": "🍳", "name": "Breakfast"},
-  ],
-  "School": [
-    {"icon": "🎒", "name": "School ready"},
-    {"icon": "📚", "name": "Homework"},
-  ],
-  "Behaviour": [
-    {"icon": "🙂", "name": "Good attitude"},
-    {"icon": "🙏", "name": "Respect elders"},
-    {"icon": "🤝", "name": "Sharing"},
-  ],
-  "Health": [
-    {"icon": "🏃", "name": "Exercise"},
-    {"icon": "🥗", "name": "Healthy food"},
-  ],
-  "Evening": [
-    {"icon": "📵", "name": "No screen time"},
-    {"icon": "🛏", "name": "Sleep on time"},
-  ],
-};
 
 ////////////////////////////////////////////////////////////
 /// MODELS
@@ -95,7 +67,7 @@ class Member {
         (j["activities"] as List)
             .map((e) => Activity.fromJson(e))
             .toList(),
-        Map<String, int>.from(j["daily"]),
+        Map<String, int>.from(j["daily"] ?? {}),
         Map<String, int>.from(j["missed"] ?? {}),
       );
 }
@@ -110,6 +82,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
       home: const FamilyPage(),
     );
@@ -117,7 +90,7 @@ class MyApp extends StatelessWidget {
 }
 
 ////////////////////////////////////////////////////////////
-/// FAMILY PAGE + SYNC
+/// FAMILY PAGE
 ////////////////////////////////////////////////////////////
 
 class FamilyPage extends StatefulWidget {
@@ -156,6 +129,10 @@ class _FamilyPageState extends State<FamilyPage> {
     }
     setState(() {});
   }
+
+  ////////////////////////////////////////////////////////////
+  /// SYNC (UNCHANGED)
+  ////////////////////////////////////////////////////////////
 
   Future<void> startServer() async {
     final ip = await _getIp();
@@ -217,7 +194,7 @@ class _FamilyPageState extends State<FamilyPage> {
       }
     });
 
-    Future.delayed(const Duration(seconds: 2), showDevices);
+    showDevices();
   }
 
   void showDevices() {
@@ -261,6 +238,10 @@ class _FamilyPageState extends State<FamilyPage> {
         .showSnackBar(const SnackBar(content: Text("Live Sync ON")));
   }
 
+  ////////////////////////////////////////////////////////////
+  /// UI
+  ////////////////////////////////////////////////////////////
+
   void addMember() {
     TextEditingController c = TextEditingController();
 
@@ -301,6 +282,8 @@ class _FamilyPageState extends State<FamilyPage> {
 
   @override
   Widget build(BuildContext context) {
+    final today = dateKey(DateTime.now());
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Happy Family"),
@@ -316,14 +299,31 @@ class _FamilyPageState extends State<FamilyPage> {
         itemCount: members.length,
         itemBuilder: (_, i) {
           final m = members[i];
-          final today = dateKey(DateTime.now());
 
-          return ListTile(
-            leading: CircleAvatar(child: Text(m.avatar)),
-            title: Text(m.name),
-            subtitle: Text(
-                "Score: ${m.dailyScore[today] ?? 0}% | Missed: ${m.missed[today] ?? 0}"),
-            onTap: () => open(m),
+          return Container(
+            margin: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              gradient: LinearGradient(
+                colors: [
+                  chartColors[i % chartColors.length],
+                  Colors.black
+                ],
+              ),
+            ),
+            child: ListTile(
+              leading: CircleAvatar(
+                radius: 28,
+                child: Text(m.avatar, style: const TextStyle(fontSize: 26)),
+              ),
+              title: Text(m.name,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(
+                  "Score: ${m.dailyScore[today] ?? 0}% | Missed: ${m.missed[today] ?? 0}"),
+              trailing: Text("${m.dailyScore[today] ?? 0}%"),
+              onTap: () => open(m),
+            ),
           );
         },
       ),
@@ -332,7 +332,7 @@ class _FamilyPageState extends State<FamilyPage> {
 }
 
 ////////////////////////////////////////////////////////////
-/// MEMBER PAGE (FIXED BUTTON)
+/// MEMBER PAGE (WITH PREMIUM QUICK ADD)
 ////////////////////////////////////////////////////////////
 
 class HomePage extends StatefulWidget {
@@ -346,6 +346,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+
   double calcScore() {
     if (widget.member.activities.isEmpty) return 0;
     int done = widget.member.activities.where((e) => e.done).length;
@@ -355,42 +356,11 @@ class _HomePageState extends State<HomePage> {
   void update() {
     final today = dateKey(DateTime.now());
 
-    int missed =
+    widget.member.dailyScore[today] = calcScore().round();
+    widget.member.missed[today] =
         widget.member.activities.where((e) => !e.done).length;
 
-    widget.member.dailyScore[today] = calcScore().round();
-    widget.member.missed[today] = missed;
-
     widget.onSave();
-  }
-
-  void addHabitFromCategory() {
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => ListView(
-        children: habitCategories.entries.map((cat) {
-          return ExpansionTile(
-            title: Text(cat.key),
-            children: cat.value.map((h) {
-              return ListTile(
-                leading:
-                    Text(h["icon"]!, style: const TextStyle(fontSize: 26)),
-                title: Text(h["name"]!),
-                onTap: () {
-                  setState(() {
-                    widget.member.activities
-                        .add(Activity(h["name"]!, h["icon"]!, false));
-                  });
-                  update();
-                  widget.onSave();
-                  Navigator.pop(context);
-                },
-              );
-            }).toList(),
-          );
-        }).toList(),
-      ),
-    );
   }
 
   List<FlSpot> chart() {
@@ -408,65 +378,141 @@ class _HomePageState extends State<HomePage> {
     return "${d.day}";
   }
 
+  ////////////////////////////////////////////////////////////
+  /// PREMIUM QUICK ADD
+  ////////////////////////////////////////////////////////////
+
+  void quickAdd() {
+    final Map<String, List<List<String>>> categories = {
+      "Morning": [
+        ["⏰", "Wake up"],
+        ["🛏️", "Make bed"],
+        ["🪥", "Brush teeth"],
+        ["🚿", "Bathing"],
+        ["👕", "Dress up"],
+      ],
+      "School": [
+        ["🎒", "School preparation"],
+        ["📚", "Study"],
+        ["✏️", "Homework"],
+      ],
+      "Behavior": [
+        ["🙂", "Good attitude"],
+        ["🙏", "Respect"],
+        ["🤝", "Help others"],
+      ],
+    };
+
+    String selected = "Morning";
+
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (_, setModal) {
+          final list = categories[selected]!;
+
+          return Container(
+            padding: const EdgeInsets.all(12),
+            height: 500,
+            child: Column(
+              children: [
+                Row(
+                  children: categories.keys.map((c) {
+                    return GestureDetector(
+                      onTap: () => setModal(() => selected = c),
+                      child: Container(
+                        margin: const EdgeInsets.all(4),
+                        padding: const EdgeInsets.all(8),
+                        color: selected == c ? Colors.pink : Colors.grey,
+                        child: Text(c),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                Expanded(
+                  child: ListView(
+                    children: list.map((h) {
+                      return ListTile(
+                        title: Text("${h[0]} ${h[1]}"),
+                        onTap: () {
+                          setState(() {
+                            widget.member.activities
+                                .add(Activity(h[1], h[0], false));
+                          });
+                          widget.onSave();
+                          Navigator.pop(context);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                )
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void addActivity() {
+    TextEditingController c = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Add Habit"),
+        content: TextField(controller: c),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() {
+                widget.member.activities.add(Activity(c.text, "⭐", false));
+              });
+              widget.onSave();
+              Navigator.pop(context);
+            },
+            child: const Text("Add"),
+          )
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = chart();
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.member.name)),
-
-      /// ✅ FIXED FAB
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            FloatingActionButton.extended(
-              heroTag: "quick",
-              onPressed: addHabitFromCategory,
-              icon: const Icon(Icons.auto_awesome),
-              label: const Text("Quick Add"),
-            ),
-            const SizedBox(height: 12),
-            FloatingActionButton.extended(
-              heroTag: "manual",
-              onPressed: () {
-                TextEditingController c = TextEditingController();
-                showDialog(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                    title: const Text("Add Custom Habit"),
-                    content: TextField(controller: c),
-                    actions: [
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            widget.member.activities
-                                .add(Activity(c.text, "⭐", false));
-                          });
-                          update();
-                          widget.onSave();
-                          Navigator.pop(context);
-                        },
-                        child: const Text("Add"),
-                      )
-                    ],
-                  ),
-                );
-              },
-              icon: const Icon(Icons.add),
-              label: const Text("Add Habit"),
-            ),
-          ],
-        ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: addActivity,
+        child: const Icon(Icons.add),
       ),
-
       body: Column(
         children: [
+          Container(
+            margin: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: const LinearGradient(
+                colors: [Colors.green, Colors.blue],
+              ),
+            ),
+            child: Column(
+              children: [
+                Text("${calcScore().round()}%",
+                    style: const TextStyle(fontSize: 28)),
+                const SizedBox(height: 10),
+                LinearProgressIndicator(value: calcScore() / 100),
+              ],
+            ),
+          ),
+
+          ElevatedButton(onPressed: quickAdd, child: const Text("⚡ Quick Add")),
+
           SizedBox(
-            height: 220,
+            height: 200,
             child: LineChart(
               LineChartData(
                 minY: 0,
@@ -485,35 +531,38 @@ class _HomePageState extends State<HomePage> {
                     spots: data,
                     isCurved: true,
                     color: Colors.cyan,
-                    dotData: FlDotData(show: true),
                   )
                 ],
               ),
             ),
           ),
+
           Expanded(
             child: ListView.builder(
               itemCount: widget.member.activities.length,
               itemBuilder: (_, i) {
                 final a = widget.member.activities[i];
 
-                return ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.blueGrey.shade700,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child:
-                        Text(a.icon, style: const TextStyle(fontSize: 26)),
+                return Container(
+                  margin: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    color: Colors.white10,
                   ),
-                  title: Text(a.name),
-                  trailing: Checkbox(
-                    value: a.done,
-                    onChanged: (v) {
-                      setState(() => a.done = v!);
-                      update();
-                    },
+                  child: Row(
+                    children: [
+                      Text(a.icon, style: const TextStyle(fontSize: 26)),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(a.name)),
+                      Checkbox(
+                        value: a.done,
+                        onChanged: (v) {
+                          setState(() => a.done = v!);
+                          update();
+                        },
+                      )
+                    ],
                   ),
                 );
               },
@@ -526,7 +575,7 @@ class _HomePageState extends State<HomePage> {
 }
 
 ////////////////////////////////////////////////////////////
-/// COMPARISON
+/// COMPARISON PAGE
 ////////////////////////////////////////////////////////////
 
 class ComparePage extends StatelessWidget {
@@ -546,16 +595,13 @@ class ComparePage extends StatelessWidget {
         children: [
           Wrap(
             children: List.generate(members.length, (i) {
-              return Padding(
-                padding: const EdgeInsets.all(4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(width: 10, height: 10, color: chartColors[i]),
-                    const SizedBox(width: 5),
-                    Text(members[i].name),
-                  ],
-                ),
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(width: 10, height: 10, color: chartColors[i]),
+                  const SizedBox(width: 5),
+                  Text(members[i].name),
+                ],
               );
             }),
           ),
