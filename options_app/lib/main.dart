@@ -8,7 +8,7 @@ void main() {
 }
 
 ////////////////////////////////////////////////////////////
-/// GLOBAL COLORS
+/// COLORS
 ////////////////////////////////////////////////////////////
 
 final List<Color> chartColors = [
@@ -28,48 +28,34 @@ String dateKey(DateTime d) {
 }
 
 ////////////////////////////////////////////////////////////
-/// HABIT CATEGORIES (NEW)
+/// STAR SYSTEM
+////////////////////////////////////////////////////////////
+
+String getStars(int score) {
+  if (score >= 80) return "⭐⭐⭐";
+  if (score >= 60) return "⭐⭐";
+  if (score >= 40) return "⭐";
+  return "";
+}
+
+////////////////////////////////////////////////////////////
+/// HABITS
 ////////////////////////////////////////////////////////////
 
 Map<String, List<String>> habitCategories = {
   "Morning": [
     "⏰ Wake up early",
-    "🛏 Make bed",
     "🪥 Brush teeth",
-    "🚿 Take bath",
-    "👕 Get dressed",
-    "🎒 Pack school bag",
-    "🍳 Eat breakfast",
+    "🚿 Bath",
+    "🍳 Breakfast"
   ],
   "School": [
-    "📚 Homework done",
-    "✏️ Carry books",
-    "🧃 Pack lunch",
-    "🚌 Ready for school",
+    "📚 Homework",
+    "🎒 School bag",
   ],
   "Behaviour": [
     "🙂 Good attitude",
-    "🙏 Respect elders",
-    "🤝 Help others",
-    "😌 Control anger",
-  ],
-  "Health": [
-    "🏃 Play outside",
-    "🚴 Cycling",
-    "🤸 Exercise",
-  ],
-  "Food": [
-    "🥗 Eat healthy",
-    "🍎 Eat fruits",
-    "🚫 Avoid junk food",
-  ],
-  "Home": [
-    "🧹 Clean room",
-    "🧸 Arrange toys",
-  ],
-  "Night": [
-    "📖 Study time",
-    "🛏 Sleep on time",
+    "🙏 Respect",
   ],
 };
 
@@ -81,20 +67,14 @@ class Activity {
   String name;
   String icon;
   bool done;
-  bool favorite;
 
-  Activity(this.name,
-      {this.icon = "🔥", this.done = false, this.favorite = false});
+  Activity(this.name, this.icon, this.done);
 
   Map<String, dynamic> toJson() =>
-      {"name": name, "icon": icon, "done": done, "favorite": favorite};
+      {"name": name, "icon": icon, "done": done};
 
-  static Activity fromJson(Map<String, dynamic> json) => Activity(
-        json["name"],
-        icon: json["icon"] ?? "🔥",
-        done: json["done"] ?? false,
-        favorite: json["favorite"] ?? false,
-      );
+  static Activity fromJson(Map<String, dynamic> json) =>
+      Activity(json["name"], json["icon"], json["done"]);
 }
 
 class Member {
@@ -114,16 +94,16 @@ class Member {
 
   static Member fromJson(Map<String, dynamic> json) => Member(
         json["name"],
-        json["avatar"] ?? "🙂",
+        json["avatar"],
         (json["activities"] as List)
             .map((e) => Activity.fromJson(e))
             .toList(),
-        Map<String, int>.from(json["daily"] ?? {}),
+        Map<String, int>.from(json["daily"]),
       );
 }
 
 ////////////////////////////////////////////////////////////
-/// APP ROOT
+/// APP
 ////////////////////////////////////////////////////////////
 
 class MyApp extends StatelessWidget {
@@ -159,18 +139,17 @@ class _FamilyPageState extends State<FamilyPage> {
   }
 
   Future<void> save() async {
-    final prefs = await SharedPreferences.getInstance();
-    prefs.setString(
-        "members", jsonEncode(members.map((e) => e.toJson()).toList()));
+    final p = await SharedPreferences.getInstance();
+    p.setString("members", jsonEncode(members.map((e) => e.toJson()).toList()));
   }
 
   Future<void> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getString("members");
+    final p = await SharedPreferences.getInstance();
+    final data = p.getString("members");
 
     if (data != null) {
-      List decoded = jsonDecode(data);
-      members = decoded.map((e) => Member.fromJson(e)).toList();
+      members =
+          (jsonDecode(data) as List).map((e) => Member.fromJson(e)).toList();
     }
     setState(() {});
   }
@@ -185,15 +164,14 @@ class _FamilyPageState extends State<FamilyPage> {
         content: TextField(controller: c),
         actions: [
           TextButton(
-            onPressed: () {
-              setState(() {
-                members.add(Member(c.text, "🙂", [], {}));
-              });
-              save();
-              Navigator.pop(context);
-            },
-            child: const Text("Add"),
-          )
+              onPressed: () {
+                setState(() {
+                  members.add(Member(c.text, "🙂", [], {}));
+                });
+                save();
+                Navigator.pop(context);
+              },
+              child: const Text("Add"))
         ],
       ),
     );
@@ -210,16 +188,12 @@ class _FamilyPageState extends State<FamilyPage> {
 
   void openComparison() {
     Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => ComparisonPage(members)),
-    );
+        context, MaterialPageRoute(builder: (_) => ComparisonPage(members)));
   }
 
   void openReport() {
     Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => ReportPage(members)),
-    );
+        context, MaterialPageRoute(builder: (_) => ReportPage(members)));
   }
 
   @override
@@ -243,10 +217,11 @@ class _FamilyPageState extends State<FamilyPage> {
             margin: const EdgeInsets.all(10),
             child: ListTile(
               leading: CircleAvatar(
-                radius: 30,
-                child: Text(m.avatar, style: const TextStyle(fontSize: 30)),
-              ),
+                  radius: 28,
+                  child: Text(m.avatar, style: const TextStyle(fontSize: 24))),
               title: Text(m.name),
+              subtitle: Text(getStars(
+                  m.dailyScore[dateKey(DateTime.now())] ?? 0)),
               onTap: () => openMember(m),
             ),
           );
@@ -273,22 +248,19 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   String filter = "week";
 
-  double calculateScore() {
+  double score() {
     if (widget.member.activities.isEmpty) return 0;
-
-    int done = widget.member.activities.where((a) => a.done).length;
-
+    int done = widget.member.activities.where((e) => e.done).length;
     return (done / widget.member.activities.length) * 100;
   }
 
   void updateScore() {
-    widget.member.dailyScore[dateKey(DateTime.now())] =
-        calculateScore().round();
+    widget.member.dailyScore[dateKey(DateTime.now())] = score().round();
     widget.onSave();
   }
 
-  List<FlSpot> getData() {
-    int days = filter == "week" ? 7 : filter == "month" ? 30 : 365;
+  List<FlSpot> chartData() {
+    int days = filter == "week" ? 7 : 30;
 
     return List.generate(days, (i) {
       final d = DateTime.now().subtract(Duration(days: days - 1 - i));
@@ -302,43 +274,27 @@ class _HomePageState extends State<HomePage> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text("Select Habit"),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView(
-            shrinkWrap: true,
-            children: habitCategories.entries.map((cat) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(cat.key,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 16)),
-                  Wrap(
-                    children: cat.value.map((h) {
-                      return ActionChip(
-                        label: Text(h),
-                        onPressed: () {
-                          String icon = h.split(" ")[0];
-                          String name = h.substring(2);
-
-                          setState(() {
-                            widget.member.activities
-                                .add(Activity(name, icon: icon));
-                          });
-
-                          updateScore();
-                          widget.onSave();
-                          Navigator.pop(context);
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  const Divider(),
-                ],
-              );
-            }).toList(),
-          ),
+        title: const Text("Add Habit"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: habitCategories.entries.map((cat) {
+            return Wrap(
+              children: cat.value.map((h) {
+                return ActionChip(
+                  label: Text(h),
+                  onPressed: () {
+                    setState(() {
+                      widget.member.activities
+                          .add(Activity(h.substring(2), h[0], false));
+                    });
+                    updateScore();
+                    widget.onSave();
+                    Navigator.pop(context);
+                  },
+                );
+              }).toList(),
+            );
+          }).toList(),
         ),
       ),
     );
@@ -346,7 +302,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final data = getData();
+    final data = chartData();
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.member.name)),
@@ -354,21 +310,33 @@ class _HomePageState extends State<HomePage> {
           FloatingActionButton(onPressed: addActivity, child: const Icon(Icons.add)),
       body: Column(
         children: [
-          DropdownButton<String>(
-            value: filter,
-            items: const [
-              DropdownMenuItem(value: "week", child: Text("Weekly")),
-              DropdownMenuItem(value: "month", child: Text("Monthly")),
-              DropdownMenuItem(value: "year", child: Text("Yearly")),
-            ],
-            onChanged: (v) => setState(() => filter = v!),
-          ),
+          Text(
+              "Today: ${getStars(widget.member.dailyScore[dateKey(DateTime.now())] ?? 0)}"),
+
+          DropdownButton(
+              value: filter,
+              items: const [
+                DropdownMenuItem(value: "week", child: Text("Weekly")),
+                DropdownMenuItem(value: "month", child: Text("Monthly")),
+              ],
+              onChanged: (v) => setState(() => filter = v!)),
+
           SizedBox(
-            height: 200,
+            height: 220,
             child: LineChart(
               LineChartData(
                 minY: 0,
                 maxY: 100,
+                lineTouchData: LineTouchData(
+                  touchTooltipData: LineTouchTooltipData(
+                    getTooltipItems: (touchedSpots) {
+                      return touchedSpots.map((e) {
+                        return LineTooltipItem(
+                            "${e.y.toInt()}%", const TextStyle());
+                      }).toList();
+                    },
+                  ),
+                ),
                 lineBarsData: [
                   LineChartBarData(
                     spots: data,
@@ -380,40 +348,24 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
+
           Expanded(
             child: ListView.builder(
               itemCount: widget.member.activities.length,
               itemBuilder: (_, i) {
                 final a = widget.member.activities[i];
 
-                return GestureDetector(
+                return ListTile(
+                  leading: Text(a.icon, style: const TextStyle(fontSize: 28)),
+                  title: Text(a.name),
+                  trailing: Icon(
+                    a.done ? Icons.check_circle : Icons.circle_outlined,
+                    color: a.done ? Colors.green : Colors.grey,
+                  ),
                   onTap: () {
                     setState(() => a.done = !a.done);
                     updateScore();
                   },
-                  child: Container(
-                    margin: const EdgeInsets.all(10),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: a.done
-                          ? Colors.green.withOpacity(0.2)
-                          : Colors.grey.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(a.icon, style: const TextStyle(fontSize: 40)),
-                        const SizedBox(width: 10),
-                        Expanded(child: Text(a.name)),
-                        Icon(
-                          a.done
-                              ? Icons.check_circle
-                              : Icons.circle_outlined,
-                          color: a.done ? Colors.green : Colors.grey,
-                        )
-                      ],
-                    ),
-                  ),
                 );
               },
             ),
@@ -425,7 +377,7 @@ class _HomePageState extends State<HomePage> {
 }
 
 ////////////////////////////////////////////////////////////
-/// COMPARISON PAGE
+/// COMPARISON PAGE (FINAL)
 ////////////////////////////////////////////////////////////
 
 class ComparisonPage extends StatelessWidget {
@@ -436,26 +388,47 @@ class ComparisonPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Comparison")),
-      body: LineChart(
-        LineChartData(
-          minY: 0,
-          maxY: 100,
-          lineBarsData: List.generate(members.length, (i) {
-            final m = members[i];
+      body: Column(
+        children: [
+          Wrap(
+            children: List.generate(members.length, (i) {
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                      width: 10,
+                      height: 10,
+                      color: chartColors[i]),
+                  const SizedBox(width: 5),
+                  Text(members[i].name),
+                ],
+              );
+            }),
+          ),
+          Expanded(
+            child: LineChart(
+              LineChartData(
+                minY: 0,
+                maxY: 100,
+                lineBarsData: List.generate(members.length, (i) {
+                  final m = members[i];
 
-            return LineChartBarData(
-              spots: List.generate(7, (j) {
-                final d =
-                    DateTime.now().subtract(Duration(days: 6 - j));
-                return FlSpot(
-                    j.toDouble(),
-                    (m.dailyScore[dateKey(d)] ?? 0).toDouble());
-              }),
-              color: chartColors[i % chartColors.length],
-              isCurved: true,
-            );
-          }),
-        ),
+                  return LineChartBarData(
+                    spots: List.generate(7, (j) {
+                      final d = DateTime.now()
+                          .subtract(Duration(days: 6 - j));
+                      return FlSpot(
+                          j.toDouble(),
+                          (m.dailyScore[dateKey(d)] ?? 0).toDouble());
+                    }),
+                    color: chartColors[i],
+                    isCurved: true,
+                  );
+                }),
+              ),
+            ),
+          )
+        ],
       ),
     );
   }
@@ -482,15 +455,9 @@ class ReportPage extends StatelessWidget {
             total += m.dailyScore[dateKey(d)] ?? 0;
           }
 
-          String insight = total > 400
-              ? "Excellent 🔥"
-              : total > 200
-                  ? "Good 👍"
-                  : "Needs improvement ⚠️";
-
           return ListTile(
             title: Text(m.name),
-            subtitle: Text("Score: $total → $insight"),
+            subtitle: Text("Score: $total"),
           );
         }).toList(),
       ),
