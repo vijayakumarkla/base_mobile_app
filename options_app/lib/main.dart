@@ -20,7 +20,7 @@ final List<Color> chartColors = [
 ];
 
 ////////////////////////////////////////////////////////////
-/// GLOBAL DATE KEY (FIXED - IMPORTANT)
+/// DATE KEY
 ////////////////////////////////////////////////////////////
 
 String dateKey(DateTime d) {
@@ -28,19 +28,73 @@ String dateKey(DateTime d) {
 }
 
 ////////////////////////////////////////////////////////////
+/// HABIT CATEGORIES (NEW)
+////////////////////////////////////////////////////////////
+
+Map<String, List<String>> habitCategories = {
+  "Morning": [
+    "⏰ Wake up early",
+    "🛏 Make bed",
+    "🪥 Brush teeth",
+    "🚿 Take bath",
+    "👕 Get dressed",
+    "🎒 Pack school bag",
+    "🍳 Eat breakfast",
+  ],
+  "School": [
+    "📚 Homework done",
+    "✏️ Carry books",
+    "🧃 Pack lunch",
+    "🚌 Ready for school",
+  ],
+  "Behaviour": [
+    "🙂 Good attitude",
+    "🙏 Respect elders",
+    "🤝 Help others",
+    "😌 Control anger",
+  ],
+  "Health": [
+    "🏃 Play outside",
+    "🚴 Cycling",
+    "🤸 Exercise",
+  ],
+  "Food": [
+    "🥗 Eat healthy",
+    "🍎 Eat fruits",
+    "🚫 Avoid junk food",
+  ],
+  "Home": [
+    "🧹 Clean room",
+    "🧸 Arrange toys",
+  ],
+  "Night": [
+    "📖 Study time",
+    "🛏 Sleep on time",
+  ],
+};
+
+////////////////////////////////////////////////////////////
 /// MODELS
 ////////////////////////////////////////////////////////////
 
 class Activity {
   String name;
-  int mood;
+  String icon;
+  bool done;
+  bool favorite;
 
-  Activity(this.name, this.mood);
+  Activity(this.name,
+      {this.icon = "🔥", this.done = false, this.favorite = false});
 
-  Map<String, dynamic> toJson() => {"name": name, "mood": mood};
+  Map<String, dynamic> toJson() =>
+      {"name": name, "icon": icon, "done": done, "favorite": favorite};
 
-  static Activity fromJson(Map<String, dynamic> json) =>
-      Activity(json["name"], json["mood"]);
+  static Activity fromJson(Map<String, dynamic> json) => Activity(
+        json["name"],
+        icon: json["icon"] ?? "🔥",
+        done: json["done"] ?? false,
+        favorite: json["favorite"] ?? false,
+      );
 }
 
 class Member {
@@ -69,133 +123,27 @@ class Member {
 }
 
 ////////////////////////////////////////////////////////////
-/// APP LOCK
-////////////////////////////////////////////////////////////
-
-class LockService {
-  static const key = "pin";
-
-  static Future<String?> getPin() async {
-    final p = await SharedPreferences.getInstance();
-    return p.getString(key);
-  }
-
-  static Future<void> setPin(String pin) async {
-    final p = await SharedPreferences.getInstance();
-    p.setString(key, pin);
-  }
-}
-
-////////////////////////////////////////////////////////////
 /// APP ROOT
 ////////////////////////////////////////////////////////////
 
-class MyApp extends StatefulWidget {
+class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  bool dark = true;
-
-  @override
-  void initState() {
-    super.initState();
-    loadTheme();
-  }
-
-  void loadTheme() async {
-    final p = await SharedPreferences.getInstance();
-    setState(() => dark = p.getBool("theme") ?? true);
-  }
-
-  void toggleTheme() async {
-    final p = await SharedPreferences.getInstance();
-    setState(() => dark = !dark);
-    p.setBool("theme", dark);
-  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: dark ? ThemeData.dark() : ThemeData.light(),
-      home: FamilyPage(onToggle: toggleTheme),
-    );
-  }
-}
-////////////////////////////////////////////////////////////
-/// LOCK SCREEN
-////////////////////////////////////////////////////////////
-
-class LockScreen extends StatefulWidget {
-  final VoidCallback onUnlock;
-  const LockScreen({super.key, required this.onUnlock});
-
-  @override
-  State<LockScreen> createState() => _LockScreenState();
-}
-
-class _LockScreenState extends State<LockScreen> {
-  TextEditingController pin = TextEditingController();
-  String? savedPin;
-
-  @override
-  void initState() {
-    super.initState();
-    loadPin();
-  }
-
-  void loadPin() async {
-    savedPin = await LockService.getPin();
-    setState(() {});
-  }
-
-  void check() async {
-    if (savedPin == null) {
-      await LockService.setPin(pin.text);
-      widget.onUnlock();
-    } else if (savedPin == pin.text) {
-      widget.onUnlock();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(savedPin == null ? "Set PIN" : "Enter PIN"),
-              TextField(
-                controller: pin,
-                obscureText: true,
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: check,
-                child: const Text("Unlock"),
-              )
-            ],
-          ),
-        ),
-      ),
+      theme: ThemeData.dark(),
+      home: const FamilyPage(),
     );
   }
 }
 
 ////////////////////////////////////////////////////////////
-/// FAMILY PAGE (EDIT + DELETE ADDED SAFELY)
+/// FAMILY PAGE
 ////////////////////////////////////////////////////////////
 
 class FamilyPage extends StatefulWidget {
-  final VoidCallback onToggle;
-  const FamilyPage({super.key, required this.onToggle});
+  const FamilyPage({super.key});
 
   @override
   State<FamilyPage> createState() => _FamilyPageState();
@@ -213,9 +161,7 @@ class _FamilyPageState extends State<FamilyPage> {
   Future<void> save() async {
     final prefs = await SharedPreferences.getInstance();
     prefs.setString(
-      "members",
-      jsonEncode(members.map((e) => e.toJson()).toList()),
-    );
+        "members", jsonEncode(members.map((e) => e.toJson()).toList()));
   }
 
   Future<void> load() async {
@@ -226,51 +172,22 @@ class _FamilyPageState extends State<FamilyPage> {
       List decoded = jsonDecode(data);
       members = decoded.map((e) => Member.fromJson(e)).toList();
     }
-
     setState(() {});
   }
 
   void addMember() {
-    TextEditingController name = TextEditingController();
-    String avatar = "🙂";
+    TextEditingController c = TextEditingController();
 
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text("Add Member"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: name),
-            const SizedBox(height: 10),
-            DropdownButton<String>(
-              value: avatar,
-              items: [
-  "🙂",
-  "👨🏻", "👩🏻",
-  "👨🏼", "👩🏼",
-  "👨🏽", "👩🏽",
-  "👨🏾", "👩🏾",
-  "👨🏿", "👩🏿",
-  "👦🏻", "👧🏻",
-  "👦🏼", "👧🏼",
-  "👶🏻",
-  "🧒🏻",
-  "🧓🏻"
-]
-                  .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                  .toList(),
-              onChanged: (v) => avatar = v!,
-            )
-          ],
-        ),
+        content: TextField(controller: c),
         actions: [
           TextButton(
             onPressed: () {
-              if (name.text.trim().isEmpty) return;
-
               setState(() {
-                members.add(Member(name.text, avatar, [], {}));
+                members.add(Member(c.text, "🙂", [], {}));
               });
               save();
               Navigator.pop(context);
@@ -282,93 +199,11 @@ class _FamilyPageState extends State<FamilyPage> {
     );
   }
 
-  void editMember(int index) {
-    TextEditingController name =
-        TextEditingController(text: members[index].name);
-
-    String avatar = members[index].avatar;
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Edit Member"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: name),
-            const SizedBox(height: 10),
-            DropdownButton<String>(
-              value: avatar,
-              items: [
-  "🙂",
-  "👨🏻", "👩🏻",
-  "👨🏼", "👩🏼",
-  "👨🏽", "👩🏽",
-  "👨🏾", "👩🏾",
-  "👨🏿", "👩🏿",
-  "👦🏻", "👧🏻",
-  "👦🏼", "👧🏼",
-  "👶🏻",
-  "🧒🏻",
-  "🧓🏻"
-]
-                  .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                  .toList(),
-              onChanged: (v) => setState(() => avatar = v!),
-            )
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              setState(() {
-                members[index].name = name.text;
-                members[index].avatar = avatar;
-              });
-              save();
-              Navigator.pop(context);
-            },
-            child: const Text("Save"),
-          )
-        ],
-      ),
-    );
-  }
-
-  void deleteMember(int index) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Delete Member?"),
-        content: Text("Are you sure you want to delete ${members[index].name}?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                members.removeAt(index);
-              });
-              save();
-              Navigator.pop(context);
-            },
-            child: const Text("Delete"),
-          ),
-        ],
-      ),
-    );
-  }
-
   void openMember(Member m) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => HomePage(
-          member: members[members.indexOf(m)],
-          onSave: save,
-        ),
+        builder: (_) => HomePage(member: m, onSave: save),
       ),
     );
   }
@@ -387,77 +222,40 @@ class _FamilyPageState extends State<FamilyPage> {
     );
   }
 
-  void showOptions(int index) {
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.edit),
-            title: const Text("Edit"),
-            onTap: () {
-              Navigator.pop(context);
-              editMember(index);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.delete, color: Colors.red),
-            title: const Text("Delete"),
-            onTap: () {
-              Navigator.pop(context);
-              deleteMember(index);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Happy Family"),
         actions: [
-          IconButton(
-              icon: const Icon(Icons.brightness_6),
-              onPressed: widget.onToggle),
-          IconButton(
-              icon: const Icon(Icons.bar_chart),
-              onPressed: openComparison),
-          IconButton(
-              icon: const Icon(Icons.insights),
-              onPressed: openReport),
+          IconButton(icon: const Icon(Icons.bar_chart), onPressed: openComparison),
+          IconButton(icon: const Icon(Icons.insights), onPressed: openReport),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: addMember,
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton:
+          FloatingActionButton(onPressed: addMember, child: const Icon(Icons.add)),
       body: ListView.builder(
         itemCount: members.length,
         itemBuilder: (_, i) {
           final m = members[i];
 
-          return ListTile(
-            leading: CircleAvatar(
-  radius: 30,
-  backgroundColor: Colors.blueGrey.shade700,
-  child: Text(
-    m.avatar,
-    style: const TextStyle(fontSize: 30),
-  ),
-),
-            title: Text(m.name),
-            onTap: () => openMember(m),
-            onLongPress: () => showOptions(i),
+          return Card(
+            margin: const EdgeInsets.all(10),
+            child: ListTile(
+              leading: CircleAvatar(
+                radius: 30,
+                child: Text(m.avatar, style: const TextStyle(fontSize: 30)),
+              ),
+              title: Text(m.name),
+              onTap: () => openMember(m),
+            ),
           );
         },
       ),
     );
   }
 }
+
 ////////////////////////////////////////////////////////////
 /// MEMBER PAGE
 ////////////////////////////////////////////////////////////
@@ -475,35 +273,75 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   String filter = "week";
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => updateScore());
+  double calculateScore() {
+    if (widget.member.activities.isEmpty) return 0;
+
+    int done = widget.member.activities.where((a) => a.done).length;
+
+    return (done / widget.member.activities.length) * 100;
   }
 
   void updateScore() {
-    final today = dateKey(DateTime.now());
-
-    int total = widget.member.activities.fold(0, (s, a) => s + a.mood);
-
-    widget.member.dailyScore[today] = total;
+    widget.member.dailyScore[dateKey(DateTime.now())] =
+        calculateScore().round();
     widget.onSave();
   }
 
   List<FlSpot> getData() {
-    int days = filter == "week"
-        ? 7
-        : filter == "month"
-            ? 30
-            : 365;
+    int days = filter == "week" ? 7 : filter == "month" ? 30 : 365;
 
     return List.generate(days, (i) {
       final d = DateTime.now().subtract(Duration(days: days - 1 - i));
       return FlSpot(
-        i.toDouble(),
-        (widget.member.dailyScore[dateKey(d)] ?? 0).toDouble(),
-      );
+          i.toDouble(),
+          (widget.member.dailyScore[dateKey(d)] ?? 0).toDouble());
     });
+  }
+
+  void addActivity() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Select Habit"),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: habitCategories.entries.map((cat) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(cat.key,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16)),
+                  Wrap(
+                    children: cat.value.map((h) {
+                      return ActionChip(
+                        label: Text(h),
+                        onPressed: () {
+                          String icon = h.split(" ")[0];
+                          String name = h.substring(2);
+
+                          setState(() {
+                            widget.member.activities
+                                .add(Activity(name, icon: icon));
+                          });
+
+                          updateScore();
+                          widget.onSave();
+                          Navigator.pop(context);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const Divider(),
+                ],
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -511,7 +349,9 @@ class _HomePageState extends State<HomePage> {
     final data = getData();
 
     return Scaffold(
-      appBar: AppBar(title: Text("${widget.member.avatar} ${widget.member.name}")),
+      appBar: AppBar(title: Text(widget.member.name)),
+      floatingActionButton:
+          FloatingActionButton(onPressed: addActivity, child: const Icon(Icons.add)),
       body: Column(
         children: [
           DropdownButton<String>(
@@ -523,18 +363,17 @@ class _HomePageState extends State<HomePage> {
             ],
             onChanged: (v) => setState(() => filter = v!),
           ),
-          Expanded(
+          SizedBox(
+            height: 200,
             child: LineChart(
               LineChartData(
-                minY: -10,
-                maxY: 10,
-                gridData: FlGridData(show: true),
+                minY: 0,
+                maxY: 100,
                 lineBarsData: [
                   LineChartBarData(
                     spots: data,
                     isCurved: true,
                     color: Colors.cyan,
-                    barWidth: 4,
                     dotData: FlDotData(show: true),
                   )
                 ],
@@ -546,17 +385,34 @@ class _HomePageState extends State<HomePage> {
               itemCount: widget.member.activities.length,
               itemBuilder: (_, i) {
                 final a = widget.member.activities[i];
-                return ListTile(
-                  title: Text(a.name),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      moodBtn("😄", 2, a),
-                      moodBtn("🙂", 1, a),
-                      moodBtn("😐", 0, a),
-                      moodBtn("🙁", -1, a),
-                      moodBtn("😡", -2, a),
-                    ],
+
+                return GestureDetector(
+                  onTap: () {
+                    setState(() => a.done = !a.done);
+                    updateScore();
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: a.done
+                          ? Colors.green.withOpacity(0.2)
+                          : Colors.grey.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(a.icon, style: const TextStyle(fontSize: 40)),
+                        const SizedBox(width: 10),
+                        Expanded(child: Text(a.name)),
+                        Icon(
+                          a.done
+                              ? Icons.check_circle
+                              : Icons.circle_outlined,
+                          color: a.done ? Colors.green : Colors.grey,
+                        )
+                      ],
+                    ),
                   ),
                 );
               },
@@ -564,51 +420,12 @@ class _HomePageState extends State<HomePage> {
           )
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: addActivity,
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-
-  void addActivity() {
-    TextEditingController c = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Add Activity"),
-        content: TextField(controller: c),
-        actions: [
-          TextButton(
-            onPressed: () {
-              setState(() {
-                widget.member.activities.add(Activity(c.text, 0));
-              });
-              widget.onSave();
-              updateScore();
-              Navigator.pop(context);
-            },
-            child: const Text("Add"),
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget moodBtn(String emoji, int val, Activity a) {
-    return IconButton(
-      onPressed: () {
-        setState(() => a.mood = val);
-        updateScore();
-      },
-      icon: Text(emoji),
     );
   }
 }
 
 ////////////////////////////////////////////////////////////
-/// COMPARISON PAGE (FIXED)
+/// COMPARISON PAGE
 ////////////////////////////////////////////////////////////
 
 class ComparisonPage extends StatelessWidget {
@@ -618,57 +435,34 @@ class ComparisonPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Family Comparison")),
-      body: Column(
-        children: [
-          Wrap(
-            children: List.generate(members.length, (i) {
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircleAvatar(backgroundColor: chartColors[i], radius: 5),
-                  const SizedBox(width: 5),
-                  Text(members[i].name),
-                ],
-              );
-            }),
-          ),
-          Expanded(
-            child: LineChart(
-              LineChartData(
-                minY: -10,
-                maxY: 10,
-                lineBarsData: List.generate(members.length, (i) {
-                  final m = members[i];
+      appBar: AppBar(title: const Text("Comparison")),
+      body: LineChart(
+        LineChartData(
+          minY: 0,
+          maxY: 100,
+          lineBarsData: List.generate(members.length, (i) {
+            final m = members[i];
 
-                  List<FlSpot> spots = [];
-
-                  for (int j = 0; j < 7; j++) {
-                    final d = DateTime.now().subtract(Duration(days: 6 - j));
-
-                    double value =
-                        (m.dailyScore[dateKey(d)] ?? 0).toDouble();
-
-                    spots.add(FlSpot(j.toDouble(), value));
-                  }
-
-                  return LineChartBarData(
-                    spots: spots,
-                    color: chartColors[i],
-                    isCurved: true,
-                  );
-                }),
-              ),
-            ),
-          ),
-        ],
+            return LineChartBarData(
+              spots: List.generate(7, (j) {
+                final d =
+                    DateTime.now().subtract(Duration(days: 6 - j));
+                return FlSpot(
+                    j.toDouble(),
+                    (m.dailyScore[dateKey(d)] ?? 0).toDouble());
+              }),
+              color: chartColors[i % chartColors.length],
+              isCurved: true,
+            );
+          }),
+        ),
       ),
     );
   }
 }
 
 ////////////////////////////////////////////////////////////
-/// REPORT PAGE (FIXED)
+/// REPORT PAGE
 ////////////////////////////////////////////////////////////
 
 class ReportPage extends StatelessWidget {
@@ -678,24 +472,23 @@ class ReportPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Weekly Insights")),
+      appBar: AppBar(title: const Text("Weekly Report")),
       body: ListView(
         children: members.map((m) {
           int total = 0;
 
-          for (int i = 6; i >= 0; i--) {
+          for (int i = 0; i < 7; i++) {
             final d = DateTime.now().subtract(Duration(days: i));
             total += m.dailyScore[dateKey(d)] ?? 0;
           }
 
-          String insight = total > 10
-              ? "Great week 😊"
-              : total > 0
-                  ? "Balanced week 🙂"
-                  : "Needs attention ⚠️";
+          String insight = total > 400
+              ? "Excellent 🔥"
+              : total > 200
+                  ? "Good 👍"
+                  : "Needs improvement ⚠️";
 
           return ListTile(
-            leading: Text(m.avatar, style: const TextStyle(fontSize: 24)),
             title: Text(m.name),
             subtitle: Text("Score: $total → $insight"),
           );
