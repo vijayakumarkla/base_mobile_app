@@ -25,6 +25,36 @@ final List<Color> chartColors = [
 ];
 
 ////////////////////////////////////////////////////////////
+/// HABIT MASTER
+////////////////////////////////////////////////////////////
+
+Map<String, List<Map<String, String>>> habitCategories = {
+  "Morning": [
+    {"icon": "⏰", "name": "Wake up"},
+    {"icon": "🪥", "name": "Brush teeth"},
+    {"icon": "🚿", "name": "Bath"},
+    {"icon": "🍳", "name": "Breakfast"},
+  ],
+  "School": [
+    {"icon": "🎒", "name": "School ready"},
+    {"icon": "📚", "name": "Homework"},
+  ],
+  "Behaviour": [
+    {"icon": "🙂", "name": "Good attitude"},
+    {"icon": "🙏", "name": "Respect elders"},
+    {"icon": "🤝", "name": "Sharing"},
+  ],
+  "Health": [
+    {"icon": "🏃", "name": "Exercise"},
+    {"icon": "🥗", "name": "Healthy food"},
+  ],
+  "Evening": [
+    {"icon": "📵", "name": "No screen time"},
+    {"icon": "🛏", "name": "Sleep on time"},
+  ],
+};
+
+////////////////////////////////////////////////////////////
 /// MODELS
 ////////////////////////////////////////////////////////////
 
@@ -112,10 +142,6 @@ class _FamilyPageState extends State<FamilyPage> {
     load();
   }
 
-  ////////////////////////////////////////////////////////////
-  /// STORAGE
-  ////////////////////////////////////////////////////////////
-
   Future<void> save() async {
     final p = await SharedPreferences.getInstance();
     p.setString("members", jsonEncode(members.map((e) => e.toJson()).toList()));
@@ -131,15 +157,10 @@ class _FamilyPageState extends State<FamilyPage> {
     setState(() {});
   }
 
-  ////////////////////////////////////////////////////////////
-  /// SERVER + BROADCAST
-  ////////////////////////////////////////////////////////////
-
   Future<void> startServer() async {
     final ip = await _getIp();
 
     server = await HttpServer.bind(InternetAddress.anyIPv4, 8080);
-
     startBroadcast(ip);
 
     server!.listen((req) async {
@@ -170,14 +191,10 @@ class _FamilyPageState extends State<FamilyPage> {
     sender!.broadcastEnabled = true;
 
     Timer.periodic(const Duration(seconds: 2), (_) {
-      sender!.send(utf8.encode("HF::$ip"),
-          InternetAddress("255.255.255.255"), 8888);
+      sender!.send(
+          utf8.encode("HF::$ip"), InternetAddress("255.255.255.255"), 8888);
     });
   }
-
-  ////////////////////////////////////////////////////////////
-  /// LISTEN + AUTO SYNC
-  ////////////////////////////////////////////////////////////
 
   void startListening() async {
     devices.clear();
@@ -200,7 +217,7 @@ class _FamilyPageState extends State<FamilyPage> {
       }
     });
 
-    showDevices();
+    Future.delayed(const Duration(seconds: 2), showDevices);
   }
 
   void showDevices() {
@@ -219,10 +236,6 @@ class _FamilyPageState extends State<FamilyPage> {
       ),
     );
   }
-
-  ////////////////////////////////////////////////////////////
-  /// REAL TIME SYNC
-  ////////////////////////////////////////////////////////////
 
   void startAutoSync(String ip) {
     autoSync?.cancel();
@@ -247,10 +260,6 @@ class _FamilyPageState extends State<FamilyPage> {
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text("Live Sync ON")));
   }
-
-  ////////////////////////////////////////////////////////////
-  /// UI
-  ////////////////////////////////////////////////////////////
 
   void addMember() {
     TextEditingController c = TextEditingController();
@@ -323,7 +332,7 @@ class _FamilyPageState extends State<FamilyPage> {
 }
 
 ////////////////////////////////////////////////////////////
-/// MEMBER PAGE
+/// MEMBER PAGE (FIXED BUTTON)
 ////////////////////////////////////////////////////////////
 
 class HomePage extends StatefulWidget {
@@ -355,6 +364,35 @@ class _HomePageState extends State<HomePage> {
     widget.onSave();
   }
 
+  void addHabitFromCategory() {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => ListView(
+        children: habitCategories.entries.map((cat) {
+          return ExpansionTile(
+            title: Text(cat.key),
+            children: cat.value.map((h) {
+              return ListTile(
+                leading:
+                    Text(h["icon"]!, style: const TextStyle(fontSize: 26)),
+                title: Text(h["name"]!),
+                onTap: () {
+                  setState(() {
+                    widget.member.activities
+                        .add(Activity(h["name"]!, h["icon"]!, false));
+                  });
+                  update();
+                  widget.onSave();
+                  Navigator.pop(context);
+                },
+              );
+            }).toList(),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   List<FlSpot> chart() {
     return List.generate(7, (i) {
       final d = DateTime.now().subtract(Duration(days: 6 - i));
@@ -376,6 +414,55 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.member.name)),
+
+      /// ✅ FIXED FAB
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            FloatingActionButton.extended(
+              heroTag: "quick",
+              onPressed: addHabitFromCategory,
+              icon: const Icon(Icons.auto_awesome),
+              label: const Text("Quick Add"),
+            ),
+            const SizedBox(height: 12),
+            FloatingActionButton.extended(
+              heroTag: "manual",
+              onPressed: () {
+                TextEditingController c = TextEditingController();
+                showDialog(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text("Add Custom Habit"),
+                    content: TextField(controller: c),
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            widget.member.activities
+                                .add(Activity(c.text, "⭐", false));
+                          });
+                          update();
+                          widget.onSave();
+                          Navigator.pop(context);
+                        },
+                        child: const Text("Add"),
+                      )
+                    ],
+                  ),
+                );
+              },
+              icon: const Icon(Icons.add),
+              label: const Text("Add Habit"),
+            ),
+          ],
+        ),
+      ),
+
       body: Column(
         children: [
           SizedBox(
@@ -411,7 +498,16 @@ class _HomePageState extends State<HomePage> {
                 final a = widget.member.activities[i];
 
                 return ListTile(
-                  title: Text("${a.icon} ${a.name}"),
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.blueGrey.shade700,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child:
+                        Text(a.icon, style: const TextStyle(fontSize: 26)),
+                  ),
+                  title: Text(a.name),
                   trailing: Checkbox(
                     value: a.done,
                     onChanged: (v) {
@@ -450,13 +546,16 @@ class ComparePage extends StatelessWidget {
         children: [
           Wrap(
             children: List.generate(members.length, (i) {
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(width: 10, height: 10, color: chartColors[i]),
-                  const SizedBox(width: 5),
-                  Text(members[i].name),
-                ],
+              return Padding(
+                padding: const EdgeInsets.all(4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(width: 10, height: 10, color: chartColors[i]),
+                    const SizedBox(width: 5),
+                    Text(members[i].name),
+                  ],
+                ),
               );
             }),
           ),
