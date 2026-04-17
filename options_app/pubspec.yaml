@@ -16,3 +16,16 @@ dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/logo.png   # ✅ IMPORTANT (missing before)
+
+dev_dependencies:
+  flutter_native_splash: ^2.4.0
+
+flutter_native_splash:
+  color: "#000000"
+  image: assets/logo.png
+  android: true
+  ios: true
+  web: true
