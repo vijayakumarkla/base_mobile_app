@@ -44,7 +44,7 @@ class _FamilyPageState extends State<FamilyPage> {
     if (n.contains("grandma")) return "assets/images/grandma.png";
     if (n.contains("girl1")) return "assets/images/SecondGirl.png";
 
-    return "assets/images/First Girl.png";
+    return "assets/images/FirstGirl.png";
   }
 
   ////////////////////////////////////////////////////////////
