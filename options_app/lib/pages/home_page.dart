@@ -17,6 +17,10 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
 
+  ////////////////////////////////////////////////////////////
+  /// SCORE
+  ////////////////////////////////////////////////////////////
+
   double calcScore() {
     if (widget.member.activities.isEmpty) return 0;
     int done = widget.member.activities.where((e) => e.done).length;
@@ -33,6 +37,10 @@ class _HomePageState extends State<HomePage> {
     widget.onSave();
   }
 
+  ////////////////////////////////////////////////////////////
+  /// CHART
+  ////////////////////////////////////////////////////////////
+
   List<FlSpot> chart() {
     return List.generate(7, (i) {
       final d = DateTime.now().subtract(Duration(days: 6 - i));
@@ -47,6 +55,96 @@ class _HomePageState extends State<HomePage> {
     final d = DateTime.now().subtract(Duration(days: 6 - i));
     return "${d.day}";
   }
+
+  ////////////////////////////////////////////////////////////
+  /// QUICK ADD (NEW)
+  ////////////////////////////////////////////////////////////
+
+  void quickAdd() {
+    final Map<String, List<List<String>>> categories = {
+      "Morning": [
+        ["⏰", "Wake up"],
+        ["🛏️", "Make bed"],
+        ["🪥", "Brush teeth"],
+        ["🚿", "Bathing"],
+        ["👕", "Dress up"],
+      ],
+      "School": [
+        ["🎒", "School preparation"],
+        ["📚", "Study"],
+        ["✏️", "Homework"],
+      ],
+      "Behavior": [
+        ["🙂", "Good attitude"],
+        ["🙏", "Respect"],
+        ["🤝", "Help others"],
+      ],
+    };
+
+    String selected = "Morning";
+
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (_, setModal) {
+          final list = categories[selected]!;
+
+          return Container(
+            padding: const EdgeInsets.all(12),
+            height: 500,
+            child: Column(
+              children: [
+                /// CATEGORY TABS
+                Row(
+                  children: categories.keys.map((c) {
+                    return GestureDetector(
+                      onTap: () => setModal(() => selected = c),
+                      child: Container(
+                        margin: const EdgeInsets.all(4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: selected == c ? Colors.pink : Colors.grey,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(c),
+                      ),
+                    );
+                  }).toList(),
+                ),
+
+                const SizedBox(height: 10),
+
+                /// HABIT LIST
+                Expanded(
+                  child: ListView(
+                    children: list.map((h) {
+                      return ListTile(
+                        leading: Text(h[0], style: const TextStyle(fontSize: 24)),
+                        title: Text(h[1]),
+                        onTap: () {
+                          setState(() {
+                            widget.member.activities
+                                .add(Activity(h[1], h[0], false));
+                          });
+                          widget.onSave();
+                          Navigator.pop(context);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                )
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  ////////////////////////////////////////////////////////////
+  /// MANUAL ADD
+  ////////////////////////////////////////////////////////////
 
   void addActivity() {
     TextEditingController c = TextEditingController();
@@ -72,18 +170,40 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  ////////////////////////////////////////////////////////////
+  /// UI
+  ////////////////////////////////////////////////////////////
+
   @override
   Widget build(BuildContext context) {
     final data = chart();
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.member.name)),
+
+      /// MANUAL ADD BUTTON
       floatingActionButton: FloatingActionButton(
         onPressed: addActivity,
         child: const Icon(Icons.add),
       ),
+
       body: Column(
         children: [
+
+          /// QUICK ADD BUTTON
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: ElevatedButton(
+              onPressed: quickAdd,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 12),
+              ),
+              child: const Text("⚡ Quick Add"),
+            ),
+          ),
+
+          /// CHART
           SizedBox(
             height: 200,
             child: LineChart(
@@ -109,6 +229,8 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
+
+          /// ACTIVITY LIST
           Expanded(
             child: ListView.builder(
               itemCount: widget.member.activities.length,
@@ -116,7 +238,8 @@ class _HomePageState extends State<HomePage> {
                 final a = widget.member.activities[i];
 
                 return ListTile(
-                  title: Text("${a.icon} ${a.name}"),
+                  leading: Text(a.icon, style: const TextStyle(fontSize: 24)),
+                  title: Text(a.name),
                   trailing: Checkbox(
                     value: a.done,
                     onChanged: (v) {
