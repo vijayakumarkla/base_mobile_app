@@ -7,6 +7,7 @@ on:
 
 env:
   SKIP_TESTS: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # ✅ future-proof
 
 jobs:
   build:
@@ -17,28 +18,34 @@ jobs:
         working-directory: options_app
 
     steps:
+      # ✅ Checkout (Node 24 compatible)
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
+      # ✅ Setup Flutter
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.41.6'
 
+      # ✅ Install dependencies
       - name: Install dependencies
         run: flutter pub get
 
-      # ✅ ADD THIS (VERY IMPORTANT)
+      # ✅ Generate Splash Screen (IMPORTANT)
       - name: Generate Splash Screen
         run: dart run flutter_native_splash:create
 
+      # ✅ Run tests (optional)
       - name: Run tests
         if: env.SKIP_TESTS != 'true'
         run: flutter test
 
+      # ✅ Build APK
       - name: Build APK
         run: flutter build apk --release
 
+      # ✅ Upload APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
