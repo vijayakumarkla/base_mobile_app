@@ -31,6 +31,26 @@ class _FamilyPageState extends State<FamilyPage> {
     load();
   }
 
+  ////////////////////////////////////////////////////////////
+  /// AVATAR LOGIC (NEW)
+  ////////////////////////////////////////////////////////////
+
+  String getAvatar(String name) {
+    final n = name.toLowerCase();
+
+    if (n.contains("mom")) return "assets/images/mom.png";
+    if (n.contains("dad")) return "assets/images/dad.png";
+    if (n.contains("grandpa")) return "assets/images/grandpa.png";
+    if (n.contains("grandma")) return "assets/images/grandma.png";
+    if (n.contains("girl1")) return "assets/images/SecondGirl.png";
+
+    return "assets/images/First Girl.png";
+  }
+
+  ////////////////////////////////////////////////////////////
+  /// STORAGE
+  ////////////////////////////////////////////////////////////
+
   Future<void> save() async {
     final p = await SharedPreferences.getInstance();
     p.setString("members", jsonEncode(members.map((e) => e.toJson()).toList()));
@@ -170,7 +190,9 @@ class _FamilyPageState extends State<FamilyPage> {
           TextButton(
             onPressed: () {
               setState(() {
-                members.add(Member(c.text, "🙂", [], {}, {}));
+                members.add(
+                  Member(c.text, getAvatar(c.text), [], {}, {}),
+                );
               });
               save();
               Navigator.pop(context);
@@ -217,7 +239,34 @@ class _FamilyPageState extends State<FamilyPage> {
           final m = members[i];
 
           return ListTile(
-            leading: CircleAvatar(child: Text(m.avatar)),
+            leading: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [Colors.blue, Colors.purple],
+                ),
+              ),
+              child: CircleAvatar(
+                radius: 24,
+                backgroundColor: Colors.black,
+                child: ClipOval(
+                  child: m.avatar.startsWith("assets/")
+                      ? Image.asset(
+                          m.avatar,
+                          width: 48,
+                          height: 48,
+                          fit: BoxFit.cover,
+                        )
+                      : Center(
+                          child: Text(
+                            m.avatar,
+                            style: const TextStyle(fontSize: 22),
+                          ),
+                        ),
+                ),
+              ),
+            ),
             title: Text(m.name),
             subtitle: Text(
                 "Score: ${m.dailyScore[today] ?? 0}% | Missed: ${m.missed[today] ?? 0}"),
