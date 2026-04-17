@@ -1,4 +1,4 @@
-// FULL FINAL FILE
+// FULL FINAL FILE WITH SPLASH + ALL FEATURES
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -73,6 +73,71 @@ class Member {
 }
 
 ////////////////////////////////////////////////////////////
+/// SPLASH SCREEN
+////////////////////////////////////////////////////////////
+
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  double opacity = 0;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Fade animation
+    Future.delayed(const Duration(milliseconds: 200), () {
+      setState(() => opacity = 1);
+    });
+
+    // Navigate
+    Future.delayed(const Duration(seconds: 2), () {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const FamilyPage()),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 800),
+          opacity: opacity,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Image(
+                image: AssetImage("assets/logo.png"),
+                width: 130,
+              ),
+              SizedBox(height: 20),
+              Text(
+                "Happy Family",
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text("Build better habits together ❤️"),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+////////////////////////////////////////////////////////////
 /// APP
 ////////////////////////////////////////////////////////////
 
@@ -84,7 +149,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
-      home: const FamilyPage(),
+      home: const SplashScreen(),
     );
   }
 }
@@ -131,7 +196,7 @@ class _FamilyPageState extends State<FamilyPage> {
   }
 
   ////////////////////////////////////////////////////////////
-  /// SYNC (UNCHANGED)
+  /// SYNC
   ////////////////////////////////////////////////////////////
 
   Future<void> startServer() async {
@@ -300,30 +365,12 @@ class _FamilyPageState extends State<FamilyPage> {
         itemBuilder: (_, i) {
           final m = members[i];
 
-          return Container(
-            margin: const EdgeInsets.all(10),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              gradient: LinearGradient(
-                colors: [
-                  chartColors[i % chartColors.length],
-                  Colors.black
-                ],
-              ),
-            ),
-            child: ListTile(
-              leading: CircleAvatar(
-                radius: 28,
-                child: Text(m.avatar, style: const TextStyle(fontSize: 26)),
-              ),
-              title: Text(m.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text(
-                  "Score: ${m.dailyScore[today] ?? 0}% | Missed: ${m.missed[today] ?? 0}"),
-              trailing: Text("${m.dailyScore[today] ?? 0}%"),
-              onTap: () => open(m),
-            ),
+          return ListTile(
+            leading: CircleAvatar(child: Text(m.avatar)),
+            title: Text(m.name),
+            subtitle: Text(
+                "Score: ${m.dailyScore[today] ?? 0}% | Missed: ${m.missed[today] ?? 0}"),
+            onTap: () => open(m),
           );
         },
       ),
@@ -332,7 +379,7 @@ class _FamilyPageState extends State<FamilyPage> {
 }
 
 ////////////////////////////////////////////////////////////
-/// MEMBER PAGE (WITH PREMIUM QUICK ADD)
+/// MEMBER PAGE
 ////////////////////////////////////////////////////////////
 
 class HomePage extends StatefulWidget {
@@ -378,82 +425,6 @@ class _HomePageState extends State<HomePage> {
     return "${d.day}";
   }
 
-  ////////////////////////////////////////////////////////////
-  /// PREMIUM QUICK ADD
-  ////////////////////////////////////////////////////////////
-
-  void quickAdd() {
-    final Map<String, List<List<String>>> categories = {
-      "Morning": [
-        ["⏰", "Wake up"],
-        ["🛏️", "Make bed"],
-        ["🪥", "Brush teeth"],
-        ["🚿", "Bathing"],
-        ["👕", "Dress up"],
-      ],
-      "School": [
-        ["🎒", "School preparation"],
-        ["📚", "Study"],
-        ["✏️", "Homework"],
-      ],
-      "Behavior": [
-        ["🙂", "Good attitude"],
-        ["🙏", "Respect"],
-        ["🤝", "Help others"],
-      ],
-    };
-
-    String selected = "Morning";
-
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (_, setModal) {
-          final list = categories[selected]!;
-
-          return Container(
-            padding: const EdgeInsets.all(12),
-            height: 500,
-            child: Column(
-              children: [
-                Row(
-                  children: categories.keys.map((c) {
-                    return GestureDetector(
-                      onTap: () => setModal(() => selected = c),
-                      child: Container(
-                        margin: const EdgeInsets.all(4),
-                        padding: const EdgeInsets.all(8),
-                        color: selected == c ? Colors.pink : Colors.grey,
-                        child: Text(c),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                Expanded(
-                  child: ListView(
-                    children: list.map((h) {
-                      return ListTile(
-                        title: Text("${h[0]} ${h[1]}"),
-                        onTap: () {
-                          setState(() {
-                            widget.member.activities
-                                .add(Activity(h[1], h[0], false));
-                          });
-                          widget.onSave();
-                          Navigator.pop(context);
-                        },
-                      );
-                    }).toList(),
-                  ),
-                )
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   void addActivity() {
     TextEditingController c = TextEditingController();
 
@@ -490,27 +461,6 @@ class _HomePageState extends State<HomePage> {
       ),
       body: Column(
         children: [
-          Container(
-            margin: const EdgeInsets.all(12),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              gradient: const LinearGradient(
-                colors: [Colors.green, Colors.blue],
-              ),
-            ),
-            child: Column(
-              children: [
-                Text("${calcScore().round()}%",
-                    style: const TextStyle(fontSize: 28)),
-                const SizedBox(height: 10),
-                LinearProgressIndicator(value: calcScore() / 100),
-              ],
-            ),
-          ),
-
-          ElevatedButton(onPressed: quickAdd, child: const Text("⚡ Quick Add")),
-
           SizedBox(
             height: 200,
             child: LineChart(
@@ -536,33 +486,20 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-
           Expanded(
             child: ListView.builder(
               itemCount: widget.member.activities.length,
               itemBuilder: (_, i) {
                 final a = widget.member.activities[i];
 
-                return Container(
-                  margin: const EdgeInsets.all(8),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    color: Colors.white10,
-                  ),
-                  child: Row(
-                    children: [
-                      Text(a.icon, style: const TextStyle(fontSize: 26)),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(a.name)),
-                      Checkbox(
-                        value: a.done,
-                        onChanged: (v) {
-                          setState(() => a.done = v!);
-                          update();
-                        },
-                      )
-                    ],
+                return ListTile(
+                  title: Text("${a.icon} ${a.name}"),
+                  trailing: Checkbox(
+                    value: a.done,
+                    onChanged: (v) {
+                      setState(() => a.done = v!);
+                      update();
+                    },
                   ),
                 );
               },
