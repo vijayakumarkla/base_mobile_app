@@ -3,6 +3,7 @@ import '../models/member.dart';
 import '../utils/helpers.dart';
 import 'home_page.dart';
 import 'compare_page.dart';
+import 'family_page.dart'; // ✅ NEW
 
 class DashboardPage extends StatefulWidget {
   final List<Member> members;
@@ -82,6 +83,20 @@ class _DashboardPageState extends State<DashboardPage>
         builder: (_) => ComparePage(widget.members),
       ),
     );
+  }
+
+  // ✅ NEW: Add Member Flow
+  void openAddMember() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const FamilyPage(),
+      ),
+    );
+
+    // 🔥 Refresh after returning
+    widget.onRefresh();
+    setState(() {});
   }
 
   ////////////////////////////////////////////////////////////
@@ -181,7 +196,7 @@ class _DashboardPageState extends State<DashboardPage>
                 ),
               ),
               title: Text(m.name),
-              subtitle: Text("Tap to open"),
+              subtitle: const Text("Tap to open"),
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () => openMember(m),
             ),
@@ -214,14 +229,44 @@ class _DashboardPageState extends State<DashboardPage>
           ),
         ],
       ),
-      body: Column(
-        children: [
-          buildTopCard(),
-          buildStatsRow(),
-          const SizedBox(height: 10),
-          buildMembers(),
-        ],
+
+      // ✅ FAB for adding members anytime
+      floatingActionButton: FloatingActionButton(
+        onPressed: openAddMember,
+        child: const Icon(Icons.add),
       ),
+
+      // ✅ EMPTY STATE + NORMAL UI
+      body: widget.members.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.group,
+                      size: 80, color: Colors.white30),
+                  const SizedBox(height: 20),
+                  const Text(
+                    "No Members Yet",
+                    style:
+                        TextStyle(fontSize: 20, color: Colors.white70),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: openAddMember,
+                    icon: const Icon(Icons.add),
+                    label: const Text("Add Member"),
+                  ),
+                ],
+              ),
+            )
+          : Column(
+              children: [
+                buildTopCard(),
+                buildStatsRow(),
+                const SizedBox(height: 10),
+                buildMembers(),
+              ],
+            ),
     );
   }
 }
