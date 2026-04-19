@@ -8,6 +8,7 @@ import '../models/member.dart';
 import '../utils/helpers.dart';
 import 'home_page.dart';
 import 'compare_page.dart';
+import 'dashboard_page.dart'; // ✅ NEW
 
 class FamilyPage extends StatefulWidget {
   const FamilyPage({super.key});
@@ -25,6 +26,8 @@ class _FamilyPageState extends State<FamilyPage> {
   List<String> devices = [];
   Timer? autoSync;
 
+  bool _openedDashboard = false; // ✅ NEW
+
   @override
   void initState() {
     super.initState();
@@ -32,7 +35,7 @@ class _FamilyPageState extends State<FamilyPage> {
   }
 
   ////////////////////////////////////////////////////////////
-  /// AVATAR LOGIC (NEW)
+  /// AVATAR LOGIC
   ////////////////////////////////////////////////////////////
 
   String getAvatar(String name) {
@@ -63,7 +66,25 @@ class _FamilyPageState extends State<FamilyPage> {
       members =
           (jsonDecode(data) as List).map((e) => Member.fromJson(e)).toList();
     }
+
     setState(() {});
+
+    // 🚀 OPEN DASHBOARD AFTER LOAD (SAFE)
+    if (!_openedDashboard) {
+      _openedDashboard = true;
+
+      Future.delayed(const Duration(milliseconds: 300), () {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => DashboardPage(
+              members: members,
+              onRefresh: load,
+            ),
+          ),
+        );
+      });
+    }
   }
 
   ////////////////////////////////////////////////////////////
@@ -175,7 +196,7 @@ class _FamilyPageState extends State<FamilyPage> {
   }
 
   ////////////////////////////////////////////////////////////
-  /// UI
+  /// UI (UNCHANGED)
   ////////////////////////////////////////////////////////////
 
   void addMember() {
