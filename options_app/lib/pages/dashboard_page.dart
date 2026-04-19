@@ -3,7 +3,6 @@ import '../models/member.dart';
 import '../utils/helpers.dart';
 import 'home_page.dart';
 import 'compare_page.dart';
-import 'family_page.dart'; // ✅ NEW
 
 class DashboardPage extends StatefulWidget {
   final List<Member> members;
@@ -36,6 +35,42 @@ class _DashboardPageState extends State<DashboardPage>
   void dispose() {
     _anim.dispose();
     super.dispose();
+  }
+
+  ////////////////////////////////////////////////////////////
+  /// ADD MEMBER (FIX)
+  ////////////////////////////////////////////////////////////
+
+  void addMember() {
+    TextEditingController c = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Add Member"),
+        content: TextField(
+          controller: c,
+          decoration: const InputDecoration(hintText: "Enter name"),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              if (c.text.trim().isEmpty) return;
+
+              setState(() {
+                widget.members.add(
+                  Member(c.text, "🙂", [], {}, {}),
+                );
+              });
+
+              widget.onRefresh(); // save + reload
+              Navigator.pop(context);
+            },
+            child: const Text("Add"),
+          )
+        ],
+      ),
+    );
   }
 
   ////////////////////////////////////////////////////////////
@@ -85,22 +120,8 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  // ✅ NEW: Add Member Flow
-  void openAddMember() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const FamilyPage(),
-      ),
-    );
-
-    // 🔥 Refresh after returning
-    widget.onRefresh();
-    setState(() {});
-  }
-
   ////////////////////////////////////////////////////////////
-  /// UI WIDGETS
+  /// UI
   ////////////////////////////////////////////////////////////
 
   Widget buildTopCard() {
@@ -178,28 +199,24 @@ class _DashboardPageState extends State<DashboardPage>
         itemBuilder: (_, i) {
           final m = widget.members[i];
 
-          return FadeTransition(
-            opacity: _anim,
-            child: ListTile(
-              leading: CircleAvatar(
-                radius: 26,
-                backgroundColor: Colors.black,
-                child: ClipOval(
-                  child: m.avatar.startsWith("assets/")
-                      ? Image.asset(
-                          m.avatar,
-                          width: 52,
-                          height: 52,
-                          fit: BoxFit.cover,
-                        )
-                      : Text(m.avatar),
-                ),
+          return ListTile(
+            leading: CircleAvatar(
+              radius: 26,
+              backgroundColor: Colors.black,
+              child: ClipOval(
+                child: m.avatar.startsWith("assets/")
+                    ? Image.asset(
+                        m.avatar,
+                        width: 52,
+                        height: 52,
+                        fit: BoxFit.cover,
+                      )
+                    : Text(m.avatar),
               ),
-              title: Text(m.name),
-              subtitle: const Text("Tap to open"),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () => openMember(m),
             ),
+            title: Text(m.name),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => openMember(m),
           );
         },
       ),
@@ -230,43 +247,20 @@ class _DashboardPageState extends State<DashboardPage>
         ],
       ),
 
-      // ✅ FAB for adding members anytime
+      // ✅ FIX: ADD BUTTON HERE
       floatingActionButton: FloatingActionButton(
-        onPressed: openAddMember,
+        onPressed: addMember,
         child: const Icon(Icons.add),
       ),
 
-      // ✅ EMPTY STATE + NORMAL UI
-      body: widget.members.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.group,
-                      size: 80, color: Colors.white30),
-                  const SizedBox(height: 20),
-                  const Text(
-                    "No Members Yet",
-                    style:
-                        TextStyle(fontSize: 20, color: Colors.white70),
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton.icon(
-                    onPressed: openAddMember,
-                    icon: const Icon(Icons.add),
-                    label: const Text("Add Member"),
-                  ),
-                ],
-              ),
-            )
-          : Column(
-              children: [
-                buildTopCard(),
-                buildStatsRow(),
-                const SizedBox(height: 10),
-                buildMembers(),
-              ],
-            ),
+      body: Column(
+        children: [
+          buildTopCard(),
+          buildStatsRow(),
+          const SizedBox(height: 10),
+          buildMembers(),
+        ],
+      ),
     );
   }
 }
